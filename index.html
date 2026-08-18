@@ -141,6 +141,7 @@
           <input type="text" id="tsSymbol" placeholder="Símbolo (ej. AAPL)" style="flex:1;">
           <button class="btn" id="tsQuoteBtn" style="white-space:nowrap;">Cotización en vivo</button>
         </div>
+        <p class="desc" id="tsQuoteError" style="display:none; color:var(--red); margin-top:6px;"></p>
       </div>
 
       <label for="strategy">Estrategia</label>
@@ -488,6 +489,7 @@ loadStrategyDefaults();
   const tsQuoteRow = document.getElementById("tsQuoteRow");
   const tsSymbol = document.getElementById("tsSymbol");
   const tsQuoteBtn = document.getElementById("tsQuoteBtn");
+  const tsQuoteError = document.getElementById("tsQuoteError");
 
   let status;
   try {
@@ -519,6 +521,7 @@ loadStrategyDefaults();
     if (!symbol) return;
     tsQuoteBtn.disabled = true;
     tsQuoteBtn.textContent = "Consultando…";
+    tsQuoteError.style.display = "none";
     try {
       const resp = await fetch(`/api/quote/${encodeURIComponent(symbol)}`);
       const data = await resp.json();
@@ -528,7 +531,8 @@ loadStrategyDefaults();
       spotInput.value = round(parseFloat(last));
       render();
     } catch (err) {
-      alert("No se pudo traer la cotización: " + err.message);
+      tsQuoteError.textContent = "No se pudo traer la cotización: " + err.message;
+      tsQuoteError.style.display = "block";
     } finally {
       tsQuoteBtn.disabled = false;
       tsQuoteBtn.textContent = "Cotización en vivo";
