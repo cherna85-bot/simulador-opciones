@@ -200,6 +200,14 @@
       <label for="spotPrice">Precio actual de la acción ($)</label>
       <input type="number" id="spotPrice" value="100" step="0.5" min="0.01">
 
+      <div class="legs-header" style="margin-top:20px;">
+        <h3>Precio teórico (Black-Scholes)</h3>
+      </div>
+      <label for="ivPct">Volatilidad implícita (%)</label>
+      <input type="number" id="ivPct" value="30" step="1" min="1" max="500">
+      <label for="dteInput">Días a vencimiento</label>
+      <input type="number" id="dteInput" value="30" step="1" min="0" max="3650">
+
       <div class="legs-header">
         <h3>Posiciones (legs)</h3>
         <button class="btn" id="addLeg">+ Agregar</button>
@@ -224,9 +232,13 @@
 
     <div class="panel">
       <canvas id="chart" width="900" height="380"></canvas>
+      <p class="desc" id="chartLegend" style="margin-top:8px;">
+        <span style="color:#5b8cff;">━</span> Ganancia/pérdida al vencimiento &nbsp;
+        <span style="color:#fbbf24;">┅</span> Valor teórico hoy (Black-Scholes, según volatilidad y días a vencimiento)
+      </p>
       <div class="stats" id="stats"></div>
       <div id="riskInfo"></div>
-      <div class="note">Las primas por defecto son estimaciones aproximadas (% del precio), no cotizaciones reales de mercado. Edítalas con datos reales de tu bróker para un análisis preciso.</div>
+      <div class="note">Las primas por defecto son estimaciones aproximadas (% del precio), no cotizaciones reales de mercado. Edítalas con datos reales de tu bróker para un análisis preciso. El precio teórico Black-Scholes es una aproximación educativa de estilo europeo; las opciones reales sobre acciones suelen ser americanas y pueden diferir, especialmente con dividendos.</div>
     </div>
   </div>
 
@@ -255,7 +267,11 @@ const {
   suggestedMultiplier,
   defaultProfitTargetPct,
   profitTargetDollar,
+  theoPayoffAt,
+  positionGreeks,
 } = OptionsLogic;
+
+const RISK_FREE_RATE = 0.04; // aproximación fija, no configurable (mantiene la UI simple)
 
 const STRATEGIES = {
   long_call: {
@@ -345,6 +361,15 @@ const riskCapitalInput = document.getElementById("riskCapital");
 const riskPctInput = document.getElementById("riskPct");
 const targetPctInput = document.getElementById("targetPct");
 const riskInfoEl = document.getElementById("riskInfo");
+const ivPctInput = document.getElementById("ivPct");
+const dteInput = document.getElementById("dteInput");
+
+function getIvPct() {
+  return Math.min(Math.max(parseFloat(ivPctInput.value) || 1, 1), 500);
+}
+function getDte() {
+  return Math.min(Math.max(parseFloat(dteInput.value) || 0, 0), 3650);
+}
 
 function getCapital() {
   return Math.max(parseFloat(riskCapitalInput.value) || 0, 0);
@@ -468,6 +493,8 @@ spotInput.oninput = render;
 riskCapitalInput.oninput = render;
 riskPctInput.oninput = render;
 targetPctInput.oninput = render;
+ivPctInput.oninput = render;
+dteInput.oninput = render;
 
 function render() {
   const P = getSpot();
@@ -485,6 +512,14 @@ function render() {
 
   const stats = computeStats(prices, payoffs);
 
+  // ---- precio teórico hoy (Black-Scholes), para la curva punteada y las griegas ----
+  const dte = getDte();
+  const T = dte / 365;
+  const sigma = getIvPct() / 100;
+  const showTheo = dte > 0;
+  const theoPayoffs = showTheo ? prices.map((S) => theoPayoffAt(legs, S, T, RISK_FREE_RATE, sigma)) : null;
+  document.getElementById("chartLegend").style.display = showTheo ? "block" : "none";
+
   // ---- draw chart ----
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
@@ -492,8 +527,8 @@ function render() {
   const padL = 60, padR = 20, padT = 20, padB = 36;
   const plotW = W - padL - padR, plotH = H - padT - padB;
 
-  const minY = Math.min(...payoffs, 0);
-  const maxY = Math.max(...payoffs, 0);
+  const minY = Math.min(...payoffs, ...(theoPayoffs || []), 0);
+  const maxY = Math.max(...payoffs, ...(theoPayoffs || []), 0);
   const yPad = (maxY - minY) * 0.1 || 10;
   const yLo = minY - yPad, yHi = maxY + yPad;
 
@@ -559,6 +594,20 @@ function render() {
     ctx.fill();
   }
 
+  // theoretical value curve today (Black-Scholes), dashed, drawn on top
+  if (showTheo) {
+    ctx.beginPath();
+    prices.forEach((S, i) => {
+      const x = xOf(S), y = yOf(theoPayoffs[i]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#fbbf24";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   // ---- stats panel ----
   const statsEl = document.getElementById("stats");
   statsEl.innerHTML = "";
@@ -585,6 +634,13 @@ function render() {
 
   const rr = riskRewardRatio(stats.maxProfit, stats.maxLoss, stats.profitUnlimited, stats.lossUnlimited);
   statBox("Riesgo/Beneficio", rr.label);
+
+  if (showTheo) {
+    const greeks = positionGreeks(legs, P, T, RISK_FREE_RATE, sigma);
+    statBox("Delta", greeks.delta.toFixed(2));
+    statBox("Theta (por día)", fmt(greeks.theta), greeks.theta < 0 ? "neg" : "pos");
+    statBox("Vega (por 1pt vol)", fmt(greeks.vega));
+  }
 
   // ---- control de riesgo y toma de ganancias ----
   riskInfoEl.innerHTML = "";

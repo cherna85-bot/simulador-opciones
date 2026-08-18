@@ -21,6 +21,11 @@ Abre `index.html` directamente en tu navegador. No requiere instalación ni buil
   retorno sobre la prima si la ganancia es ilimitada) que muestra a qué precio del
   subyacente se alcanzaría. Son reglas generales de referencia, no recomendaciones
   personalizadas.
+- Precio teórico con Black-Scholes: además de la curva de ganancia/pérdida *al
+  vencimiento*, una segunda curva punteada muestra cuánto valdría la posición
+  *hoy* (según la volatilidad implícita y los días a vencimiento que ingreses),
+  junto con Delta, Theta (por día) y Vega de la posición completa. Es una
+  aproximación educativa de estilo europeo.
 
 ## Pruebas
 
