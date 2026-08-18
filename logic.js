@@ -24,20 +24,25 @@
     return total;
   }
 
+  // Encuentra los precios donde la curva de payoff cruza un umbral dado
+  // (breakeven = cruce por 0; también sirve para un objetivo de ganancia > 0).
+  function findCrossings(prices, payoffs, threshold) {
+    const crossings = [];
+    for (let i = 1; i < prices.length; i++) {
+      const a = payoffs[i - 1] - threshold, b = payoffs[i] - threshold;
+      if ((a < 0 && b >= 0) || (a > 0 && b <= 0)) {
+        const t = a === b ? 0 : (0 - a) / (b - a);
+        crossings.push(round(prices[i - 1] + t * (prices[i] - prices[i - 1])));
+      }
+    }
+    return crossings;
+  }
+
   function computeStats(prices, payoffs) {
     const N = payoffs.length - 1;
     const maxProfit = Math.max(...payoffs);
     const maxLoss = Math.min(...payoffs);
-
-    // breakevens: sign changes
-    const breakevens = [];
-    for (let i = 1; i < prices.length; i++) {
-      const a = payoffs[i - 1], b = payoffs[i];
-      if ((a < 0 && b >= 0) || (a > 0 && b <= 0)) {
-        const t = a === b ? 0 : (0 - a) / (b - a);
-        breakevens.push(round(prices[i - 1] + t * (prices[i] - prices[i - 1])));
-      }
-    }
+    const breakevens = findCrossings(prices, payoffs, 0);
 
     // Only the upside (S -> infinity) can be truly unbounded, since price can't go below 0.
     // Detect a persistent non-zero slope at the right edge of the simulated range.
@@ -52,5 +57,49 @@
     return { maxProfit, maxLoss, breakevens, profitUnlimited, lossUnlimited };
   }
 
-  return { round, payoffAt, computeStats };
+  // Relación entre ganancia máxima y pérdida máxima, como referencia de control de riesgo.
+  function riskRewardRatio(maxProfit, maxLoss, profitUnlimited, lossUnlimited) {
+    if (profitUnlimited) return { ratio: null, label: "Ganancia ilimitada" };
+    if (lossUnlimited) return { ratio: null, label: "Riesgo indefinido" };
+    if (maxLoss === 0) return { ratio: null, label: "Sin riesgo" };
+    const ratio = maxProfit / Math.abs(maxLoss);
+    return { ratio, label: "1 : " + ratio.toFixed(2) };
+  }
+
+  // Cuántas veces se podría escalar la posición actual (multiplicando la cantidad
+  // de cada leg por igual) sin superar el presupuesto de riesgo indicado.
+  function suggestedMultiplier(maxLoss, lossUnlimited, riskBudget) {
+    if (lossUnlimited) {
+      return { multiplier: null, warning: "Riesgo indefinido: no se puede calcular un tamaño de posición basado en la pérdida máxima." };
+    }
+    if (maxLoss >= 0) {
+      return { multiplier: null, warning: "Esta posición no tiene riesgo de pérdida en el rango simulado." };
+    }
+    const multiplier = Math.floor(riskBudget / Math.abs(maxLoss));
+    return { multiplier, warning: null };
+  }
+
+  // % de ganancia objetivo por defecto, según reglas comunes de la industria:
+  // en estrategias de ganancia ilimitada, un retorno sobre la prima pagada;
+  // en estrategias de riesgo/beneficio definidos, un % de la ganancia máxima.
+  function defaultProfitTargetPct(profitUnlimited) {
+    return profitUnlimited ? 100 : 50;
+  }
+
+  // Monto en dólares que representa el objetivo de ganancia elegido.
+  function profitTargetDollar(profitUnlimited, maxProfit, netCost, targetPct) {
+    const basis = profitUnlimited ? Math.abs(netCost) : maxProfit;
+    return basis * (targetPct / 100);
+  }
+
+  return {
+    round,
+    payoffAt,
+    computeStats,
+    findCrossings,
+    riskRewardRatio,
+    suggestedMultiplier,
+    defaultProfitTargetPct,
+    profitTargetDollar,
+  };
 });

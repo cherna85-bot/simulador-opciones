@@ -15,6 +15,12 @@ Abre `index.html` directamente en tu navegador. No requiere instalación ni buil
   Bull Call Spread, Bear Put Spread, Long Straddle, Long Strangle e Iron Condor.
 - Edición de precio de la acción, strikes, primas y cantidad de contratos por posición (leg).
 - Gráfico de payoff al vencimiento, con ganancia máxima, pérdida máxima y punto(s) de equilibrio.
+- Control de riesgo: ratio riesgo/beneficio, alerta de riesgo de pérdida ilimitada, y una
+  calculadora de tamaño de posición (según tu capital y % que estés dispuesto a arriesgar).
+- Toma de ganancias: un objetivo de ganancia editable (% de la ganancia máxima, o % de
+  retorno sobre la prima si la ganancia es ilimitada) que muestra a qué precio del
+  subyacente se alcanzaría. Son reglas generales de referencia, no recomendaciones
+  personalizadas.
 
 ## Pruebas
 
