@@ -118,6 +118,92 @@
     return nearest;
   }
 
+  // Aproximación de Abramowitz & Stegun (precisión ~1e-7) para la función de
+  // distribución acumulada normal estándar — evita depender de una librería.
+  function normCdf(x) {
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989423 * Math.exp((-x * x) / 2);
+    let prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    if (x > 0) prob = 1 - prob;
+    return prob;
+  }
+
+  function normPdf(x) {
+    return Math.exp((-x * x) / 2) / Math.sqrt(2 * Math.PI);
+  }
+
+  // Precio teórico y "griegas" de una opción europea vía Black-Scholes.
+  // S: precio del subyacente, K: strike, T: tiempo a vencimiento en años,
+  // r: tasa libre de riesgo anual, sigma: volatilidad implícita anual (ej. 0.3 = 30%).
+  // theta se devuelve por día calendario; vega, por punto porcentual de volatilidad.
+  // Es una aproximación educativa (estilo europeo) — las opciones reales sobre
+  // acciones suelen ser americanas y pueden diferir, sobre todo con dividendos.
+  function blackScholes(S, K, T, r, sigma, kind) {
+    if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) {
+      const intrinsic = kind === "call" ? Math.max(S - K, 0) : Math.max(K - S, 0);
+      const delta = kind === "call" ? (S > K ? 1 : 0) : (S < K ? -1 : 0);
+      return { price: intrinsic, delta, gamma: 0, theta: 0, vega: 0 };
+    }
+
+    const sqrtT = Math.sqrt(T);
+    const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * sqrtT);
+    const d2 = d1 - sigma * sqrtT;
+    const pdfD1 = normPdf(d1);
+    const discK = K * Math.exp(-r * T);
+
+    let price, delta, theta;
+    if (kind === "call") {
+      price = S * normCdf(d1) - discK * normCdf(d2);
+      delta = normCdf(d1);
+      theta = (-((S * pdfD1 * sigma) / (2 * sqrtT)) - r * discK * normCdf(d2)) / 365;
+    } else {
+      price = discK * normCdf(-d2) - S * normCdf(-d1);
+      delta = normCdf(d1) - 1;
+      theta = (-((S * pdfD1 * sigma) / (2 * sqrtT)) + r * discK * normCdf(-d2)) / 365;
+    }
+    const gamma = pdfD1 / (S * sigma * sqrtT);
+    const vega = (S * pdfD1 * sqrtT) / 100;
+
+    return { price, delta, gamma, theta, vega };
+  }
+
+  // Igual que payoffAt, pero valuando las legs de opciones con su precio
+  // teórico de Black-Scholes (en vez de su valor intrínseco al vencimiento).
+  // Con T=0 coincide exactamente con payoffAt (converge al intrínseco).
+  function theoPayoffAt(legs, S, T, r, sigma) {
+    let total = 0;
+    for (const leg of legs) {
+      if (leg.kind === "stock") {
+        const dir = leg.action === "buy" ? 1 : -1;
+        total += (S - leg.entryPrice) * leg.qty * dir;
+      } else {
+        const bs = blackScholes(S, leg.strike, T, r, sigma, leg.kind);
+        const perShare = leg.action === "buy" ? (bs.price - leg.premium) : (leg.premium - bs.price);
+        total += perShare * leg.qty * 100;
+      }
+    }
+    return total;
+  }
+
+  // Griegas de la posición completa (suma de cada leg, con su signo y tamaño).
+  function positionGreeks(legs, S, T, r, sigma) {
+    let delta = 0, gamma = 0, theta = 0, vega = 0;
+    for (const leg of legs) {
+      if (leg.kind === "stock") {
+        const dir = leg.action === "buy" ? 1 : -1;
+        delta += leg.qty * dir;
+      } else {
+        const bs = blackScholes(S, leg.strike, T, r, sigma, leg.kind);
+        const dir = leg.action === "buy" ? 1 : -1;
+        delta += bs.delta * leg.qty * 100 * dir;
+        gamma += bs.gamma * leg.qty * 100 * dir;
+        theta += bs.theta * leg.qty * 100 * dir;
+        vega += bs.vega * leg.qty * 100 * dir;
+      }
+    }
+    return { delta, gamma, theta, vega };
+  }
+
   return {
     round,
     payoffAt,
@@ -128,5 +214,9 @@
     defaultProfitTargetPct,
     profitTargetDollar,
     parseEarningsCalendarCsv,
+    normCdf,
+    blackScholes,
+    theoPayoffAt,
+    positionGreeks,
   };
 });

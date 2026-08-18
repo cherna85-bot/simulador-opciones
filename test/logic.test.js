@@ -10,6 +10,9 @@ const {
   defaultProfitTargetPct,
   profitTargetDollar,
   parseEarningsCalendarCsv,
+  blackScholes,
+  theoPayoffAt,
+  positionGreeks,
 } = require("../logic.js");
 
 function priceRange(legs, hi) {
@@ -140,4 +143,53 @@ test("parseEarningsCalendarCsv: encuentra el próximo reporte de un símbolo", (
   assert.equal(parseEarningsCalendarCsv(csv, "TSLA", "2026-01-01"), null);
   // Sin fechas futuras en el horizonte → null.
   assert.equal(parseEarningsCalendarCsv(csv, "AAPL", "2026-05-01"), null);
+});
+
+test("blackScholes: coincide con los valores de referencia del ejemplo clásico (S=K=100, T=1, r=5%, sigma=20%)", () => {
+  const call = blackScholes(100, 100, 1, 0.05, 0.2, "call");
+  const put = blackScholes(100, 100, 1, 0.05, 0.2, "put");
+
+  assert.ok(Math.abs(call.price - 10.45) < 0.01, `call.price=${call.price}`);
+  assert.ok(Math.abs(put.price - 5.57) < 0.01, `put.price=${put.price}`);
+  assert.ok(Math.abs(call.delta - 0.6368) < 0.001, `call.delta=${call.delta}`);
+  assert.ok(Math.abs(put.delta - (-0.3632)) < 0.001, `put.delta=${put.delta}`);
+
+  // Put-call parity: C - P = S - K*e^(-rT)
+  const parityLhs = call.price - put.price;
+  const parityRhs = 100 - 100 * Math.exp(-0.05 * 1);
+  assert.ok(Math.abs(parityLhs - parityRhs) < 0.01);
+
+  // Gamma y vega son iguales para call y put al mismo strike/vencimiento.
+  assert.ok(Math.abs(call.gamma - put.gamma) < 1e-9);
+  assert.ok(Math.abs(call.vega - put.vega) < 1e-9);
+});
+
+test("blackScholes: con T=0 converge al valor intrínseco (igual que payoffAt al vencimiento)", () => {
+  const itmCall = blackScholes(110, 100, 0, 0.05, 0.2, "call");
+  assert.equal(itmCall.price, 10);
+  assert.equal(itmCall.delta, 1);
+
+  const otmPut = blackScholes(110, 100, 0, 0.05, 0.2, "put");
+  assert.equal(otmPut.price, 0);
+  assert.equal(otmPut.delta, 0);
+});
+
+test("theoPayoffAt: con T=0 da el mismo resultado que payoffAt", () => {
+  const legs = [
+    { kind: "call", action: "buy", strike: 100, premium: 3, qty: 1 },
+    { kind: "call", action: "sell", strike: 110, premium: 1.5, qty: 1 },
+  ];
+  for (const S of [80, 100, 105, 110, 130]) {
+    assert.equal(theoPayoffAt(legs, S, 0, 0.05, 0.2), payoffAt(legs, S));
+  }
+});
+
+test("positionGreeks: delta de una acción larga es su cantidad; long call tiene delta positivo", () => {
+  const stockLegs = [{ kind: "stock", action: "buy", entryPrice: 100, qty: 100 }];
+  assert.equal(positionGreeks(stockLegs, 100, 0.1, 0.05, 0.2).delta, 100);
+
+  const callLegs = [{ kind: "call", action: "buy", strike: 100, premium: 3, qty: 1 }];
+  const g = positionGreeks(callLegs, 100, 30 / 365, 0.05, 0.3);
+  assert.ok(g.delta > 0 && g.delta < 100, `delta=${g.delta}`); // delta * 100 acciones, entre 0 y 1 por acción
+  assert.ok(g.theta < 0, `theta=${g.theta}`); // comprar opciones pierde valor con el paso del tiempo
 });
