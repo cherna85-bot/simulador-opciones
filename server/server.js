@@ -219,6 +219,37 @@ app.get("/api/options/:symbol", requireConfig, async (req, res) => {
   }
 });
 
+const BAR_TF = {
+  "5m": { interval: 5, barsback: 60 }, // ~5h de contexto
+  "1h": { interval: 60, barsback: 48 }, // ~2 días de contexto
+  "4h": { interval: 240, barsback: 30 }, // ~5 días de contexto
+};
+
+app.get("/api/bars/:symbol", requireConfig, async (req, res) => {
+  const tf = BAR_TF[req.query.tf];
+  if (!tf) {
+    return res.status(400).json({ error: "Parámetro 'tf' inválido. Usa 5m, 1h o 4h." });
+  }
+  try {
+    const token = await getValidAccessToken();
+    const params = new URLSearchParams({
+      unit: "Minute",
+      interval: String(tf.interval),
+      barsback: String(tf.barsback),
+    });
+    const resp = await fetch(
+      `${TS_BASE}/marketdata/barcharts/${encodeURIComponent(req.params.symbol)}?${params}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!resp.ok) {
+      return res.status(resp.status).json({ error: await resp.text() });
+    }
+    res.json(await resp.json());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/fundamentals/:symbol", requireAVConfig, async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
   try {

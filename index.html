@@ -90,6 +90,7 @@
     padding: 0 4px;
   }
   canvas { width: 100%; height: 380px; display: block; background: var(--panel-2); border-radius: 10px; }
+  canvas.mini-chart { height: 160px; }
   .stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -190,7 +191,9 @@
           <input type="text" id="tsSymbol" placeholder="Símbolo (ej. AAPL)" style="flex:1;">
           <button class="btn" id="tsQuoteBtn" style="white-space:nowrap;">Cotización en vivo</button>
         </div>
+        <button class="btn" id="tsChartsBtn" style="display:none; margin-top:8px; width:100%;">Cargar gráficos 5min/1h/4h</button>
         <p class="desc" id="tsQuoteError" style="display:none; color:var(--red); margin-top:6px;"></p>
+        <p class="desc" id="tsChartsError" style="display:none; color:var(--red); margin-top:6px;"></p>
       </div>
 
       <label for="strategy">Estrategia</label>
@@ -240,6 +243,20 @@
       <div id="riskInfo"></div>
       <div class="note">Las primas por defecto son estimaciones aproximadas (% del precio), no cotizaciones reales de mercado. Edítalas con datos reales de tu bróker para un análisis preciso. El precio teórico Black-Scholes es una aproximación educativa de estilo europeo; las opciones reales sobre acciones suelen ser americanas y pueden diferir, especialmente con dividendos.</div>
     </div>
+  </div>
+
+  <div class="panel" id="tsChartsPanel" style="display:none; margin-top:20px;">
+    <div class="legs-header" style="margin-top:0;">
+      <h3>Análisis multi-temporalidad</h3>
+      <span class="desc" id="tsChartsSymbolLabel" style="margin:0;">—</span>
+    </div>
+    <p class="desc" id="chart4hLabel">4 horas</p>
+    <canvas id="chart4h" class="mini-chart" width="900" height="160"></canvas>
+    <p class="desc" id="chart1hLabel" style="margin-top:14px;">1 hora</p>
+    <canvas id="chart1h" class="mini-chart" width="900" height="160"></canvas>
+    <p class="desc" id="chart5mLabel" style="margin-top:14px;">5 minutos</p>
+    <canvas id="chart5m" class="mini-chart" width="900" height="160"></canvas>
+    <div class="note">Herramienta de análisis, no genera señales de entrada/salida — la lectura y la decisión son tuyas.</div>
   </div>
 
   <div class="panel" id="fundPanel" style="display:none; margin-top:20px;">
@@ -700,6 +717,10 @@ loadStrategyDefaults();
   const tsSymbol = document.getElementById("tsSymbol");
   const tsQuoteBtn = document.getElementById("tsQuoteBtn");
   const tsQuoteError = document.getElementById("tsQuoteError");
+  const tsChartsBtn = document.getElementById("tsChartsBtn");
+  const tsChartsError = document.getElementById("tsChartsError");
+  const tsChartsPanel = document.getElementById("tsChartsPanel");
+  const tsChartsSymbolLabel = document.getElementById("tsChartsSymbolLabel");
 
   let status;
   try {
@@ -725,6 +746,7 @@ loadStrategyDefaults();
 
   tsStatusText.textContent = `Conectado ✓ (${status.env.toUpperCase()})`;
   tsQuoteRow.style.display = "flex";
+  tsChartsBtn.style.display = "block";
 
   tsQuoteBtn.onclick = async () => {
     const symbol = tsSymbol.value.trim().toUpperCase();
@@ -746,6 +768,94 @@ loadStrategyDefaults();
     } finally {
       tsQuoteBtn.disabled = false;
       tsQuoteBtn.textContent = "Cotización en vivo";
+    }
+  };
+
+  function drawCandles(canvas, bars, label) {
+    const dctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    dctx.clearRect(0, 0, W, H);
+
+    if (!bars.length) {
+      dctx.fillStyle = "#9aa7c2";
+      dctx.font = "12px sans-serif";
+      dctx.fillText("Sin datos para " + label, 12, H / 2);
+      return;
+    }
+
+    const padL = 55, padR = 10, padT = 10, padB = 18;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    const highs = bars.map((b) => b.High);
+    const lows = bars.map((b) => b.Low);
+    const yLo = Math.min(...lows), yHi = Math.max(...highs);
+    const yPad = (yHi - yLo) * 0.08 || 1;
+    const lo = yLo - yPad, hi = yHi + yPad;
+
+    const yOf = (v) => padT + (1 - (v - lo) / (hi - lo)) * plotH;
+    const slot = plotW / bars.length;
+    const bodyW = Math.max(slot * 0.6, 1);
+
+    // grid + y labels
+    dctx.strokeStyle = "#2a3550";
+    dctx.lineWidth = 1;
+    dctx.font = "10px sans-serif";
+    dctx.fillStyle = "#9aa7c2";
+    for (let i = 0; i <= 3; i++) {
+      const v = lo + (hi - lo) * (i / 3);
+      const y = yOf(v);
+      dctx.beginPath(); dctx.moveTo(padL, y); dctx.lineTo(W - padR, y); dctx.stroke();
+      dctx.fillText(v.toFixed(2), 4, y + 3);
+    }
+
+    bars.forEach((bar, i) => {
+      const x = padL + slot * i + slot / 2;
+      const up = bar.Close >= bar.Open;
+      dctx.strokeStyle = dctx.fillStyle = up ? "#34d399" : "#f87171";
+
+      dctx.beginPath();
+      dctx.moveTo(x, yOf(bar.High));
+      dctx.lineTo(x, yOf(bar.Low));
+      dctx.stroke();
+
+      const yOpen = yOf(bar.Open), yClose = yOf(bar.Close);
+      const bodyTop = Math.min(yOpen, yClose);
+      const bodyH = Math.max(Math.abs(yClose - yOpen), 1);
+      dctx.fillRect(x - bodyW / 2, bodyTop, bodyW, bodyH);
+    });
+  }
+
+  tsChartsBtn.onclick = async () => {
+    const symbol = tsSymbol.value.trim().toUpperCase();
+    if (!symbol) return;
+    tsChartsBtn.disabled = true;
+    tsChartsBtn.textContent = "Cargando…";
+    tsChartsError.style.display = "none";
+    try {
+      const tfs = [
+        { tf: "4h", canvasId: "chart4h", label: "4 horas" },
+        { tf: "1h", canvasId: "chart1h", label: "1 hora" },
+        { tf: "5m", canvasId: "chart5m", label: "5 minutos" },
+      ];
+      const responses = await Promise.all(
+        tfs.map((t) => fetch(`/api/bars/${encodeURIComponent(symbol)}?tf=${t.tf}`))
+      );
+      const bodies = await Promise.all(responses.map((r) => r.json()));
+
+      tfs.forEach((t, i) => {
+        if (!responses[i].ok) throw new Error(bodies[i].error || `Error trayendo velas de ${t.label}`);
+        const bars = bodies[i].Bars || [];
+        drawCandles(document.getElementById(t.canvasId), bars, t.label);
+      });
+
+      tsChartsSymbolLabel.textContent = symbol;
+      tsChartsPanel.style.display = "block";
+    } catch (err) {
+      tsChartsError.textContent = "No se pudieron traer los gráficos: " + err.message;
+      tsChartsError.style.display = "block";
+    } finally {
+      tsChartsBtn.disabled = false;
+      tsChartsBtn.textContent = "Cargar gráficos 5min/1h/4h";
     }
   };
 })();
