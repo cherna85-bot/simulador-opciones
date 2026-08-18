@@ -188,7 +188,7 @@
         </div>
         <a id="tsConnectBtn" class="btn" href="/auth/login" style="display:none; text-decoration:none; margin-top:8px;">Conectar cuenta</a>
         <div id="tsQuoteRow" style="display:none; gap:6px; margin-top:8px;">
-          <input type="text" id="tsSymbol" placeholder="Símbolo (ej. AAPL)" style="flex:1;">
+          <input type="text" id="tsSymbol" placeholder="Símbolo (ej. AAPL)" aria-label="Símbolo para cotización" style="flex:1;">
           <button class="btn" id="tsQuoteBtn" style="white-space:nowrap;">Cotización en vivo</button>
         </div>
         <button class="btn" id="tsChartsBtn" style="display:none; margin-top:8px; width:100%;">Cargar gráficos 5min/1h/4h</button>
@@ -265,7 +265,7 @@
       <span class="desc" id="fundStatusText" style="margin:0;">—</span>
     </div>
     <div id="fundSearchRow" style="display:none; gap:6px; margin-top:8px;">
-      <input type="text" id="fundSymbol" placeholder="Símbolo (ej. AAPL)" style="flex:1;">
+      <input type="text" id="fundSymbol" placeholder="Símbolo (ej. AAPL)" aria-label="Símbolo para datos fundamentales" style="flex:1;">
       <button class="btn" id="fundSearchBtn" style="white-space:nowrap;">Buscar</button>
     </div>
     <p class="desc" id="fundError" style="display:none; color:var(--red); margin-top:6px;"></p>
@@ -448,6 +448,7 @@ function renderLegs() {
     row.className = "leg-row";
 
     const kindSel = document.createElement("select");
+    kindSel.setAttribute("aria-label", `Tipo de posición ${i + 1}`);
     ["call","put","stock"].forEach(k => {
       const o = document.createElement("option");
       o.value = k; o.textContent = k;
@@ -457,6 +458,7 @@ function renderLegs() {
     kindSel.onchange = () => { leg.kind = kindSel.value; renderLegs(); render(); };
 
     const actionSel = document.createElement("select");
+    actionSel.setAttribute("aria-label", `Acción (compra o venta) de la posición ${i + 1}`);
     ["buy","sell"].forEach(a => {
       const o = document.createElement("option");
       o.value = a; o.textContent = a === "buy" ? "compra" : "venta";
@@ -473,6 +475,7 @@ function renderLegs() {
       priceInput.type = "number"; priceInput.step = "0.5";
       priceInput.value = leg.entryPrice;
       priceInput.placeholder = "precio entrada";
+      priceInput.setAttribute("aria-label", `Precio de entrada de la posición ${i + 1}`);
       priceInput.oninput = () => { leg.entryPrice = parseFloat(priceInput.value) || 0; render(); };
       row.appendChild(priceInput);
 
@@ -483,6 +486,7 @@ function renderLegs() {
       qtyInput.type = "number"; qtyInput.step = "1";
       qtyInput.value = leg.qty;
       qtyInput.placeholder = "acciones";
+      qtyInput.setAttribute("aria-label", `Cantidad de acciones de la posición ${i + 1}`);
       qtyInput.oninput = () => { leg.qty = parseFloat(qtyInput.value) || 0; render(); };
       row.appendChild(qtyInput);
     } else {
@@ -490,6 +494,7 @@ function renderLegs() {
       strikeInput.type = "number"; strikeInput.step = "0.5";
       strikeInput.value = leg.strike;
       strikeInput.placeholder = "strike";
+      strikeInput.setAttribute("aria-label", `Precio de ejercicio (strike) de la posición ${i + 1}`);
       strikeInput.oninput = () => { leg.strike = parseFloat(strikeInput.value) || 0; render(); };
       row.appendChild(strikeInput);
 
@@ -497,6 +502,7 @@ function renderLegs() {
       premInput.type = "number"; premInput.step = "0.01";
       premInput.value = leg.premium;
       premInput.placeholder = "prima";
+      premInput.setAttribute("aria-label", `Prima de la posición ${i + 1}`);
       premInput.oninput = () => { leg.premium = parseFloat(premInput.value) || 0; render(); };
       row.appendChild(premInput);
 
@@ -504,6 +510,7 @@ function renderLegs() {
       qtyInput.type = "number"; qtyInput.step = "1";
       qtyInput.value = leg.qty;
       qtyInput.placeholder = "contratos";
+      qtyInput.setAttribute("aria-label", `Cantidad de contratos de la posición ${i + 1}`);
       qtyInput.oninput = () => { leg.qty = parseFloat(qtyInput.value) || 0; render(); };
       row.appendChild(qtyInput);
     }
@@ -511,6 +518,7 @@ function renderLegs() {
     const removeBtn = document.createElement("button");
     removeBtn.className = "leg-remove";
     removeBtn.textContent = "✕";
+    removeBtn.setAttribute("aria-label", `Eliminar posición ${i + 1}`);
     removeBtn.onclick = () => { legs.splice(i, 1); renderLegs(); render(); };
     row.appendChild(removeBtn);
 
