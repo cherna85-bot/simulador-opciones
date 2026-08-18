@@ -1,0 +1,9 @@
+{
+  "name": "simulador-opciones",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Simulador educativo de estrategias de opciones (HTML/CSS/JS estático).",
+  "scripts": {
+    "test": "node --test"
+  }
+}

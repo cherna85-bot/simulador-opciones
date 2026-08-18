@@ -14,6 +14,18 @@ Abre `index.html` directamente en tu navegador. No requiere instalación ni buil
 - Edición de precio de la acción, strikes, primas y cantidad de contratos por posición (leg).
 - Gráfico de payoff al vencimiento, con ganancia máxima, pérdida máxima y punto(s) de equilibrio.
 
+## Pruebas
+
+La lógica de cálculo (payoff por leg, ganancia/pérdida máxima, breakeven) vive en
+`logic.js`, compartida entre `index.html` y las pruebas. Se corre con el test runner
+nativo de Node (sin dependencias que instalar):
+
+```bash
+node --test
+# o, equivalente:
+npm test
+```
+
 ## Integración opcional con TradeStation (datos de mercado en vivo)
 
 Si quieres traer la cotización real del subyacente desde tu cuenta de TradeStation
