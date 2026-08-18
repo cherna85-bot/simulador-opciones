@@ -56,8 +56,23 @@ Luego abre `http://localhost:3000` (en vez de abrir `index.html` directo) y usa 
 Sin el backend corriendo, `index.html` sigue funcionando exactamente igual que siempre,
 de forma 100% manual.
 
+## Integración opcional con Alpha Vantage (fundamentales, earnings y noticias)
+
+Con el mismo backend local (`server/`) puedes traer, para cualquier símbolo:
+nombre/sector/market cap/P-E de la empresa, la fecha del próximo reporte de
+earnings, y hasta 5 noticias recientes con su sentimiento (positivo/neutral/negativo).
+
+1. Consigue una API key gratuita (instantánea, sin tarjeta) en
+   https://www.alphavantage.co/support/#api-key
+2. Agrégala a `server/.env`: `ALPHAVANTAGE_API_KEY=tu_key`
+3. Reinicia el servidor (`npm start` dentro de `server/`) y abre `http://localhost:3000`.
+
+El tier gratuito de Alpha Vantage permite ~25 requests/día — el backend cachea
+las respuestas (1h fundamentales/earnings, 15min noticias) para no agotarlo.
+
 ## Aviso
 
 Es una herramienta educativa. Las primas por defecto son estimaciones aproximadas, no
-cotizaciones reales de mercado, y el contenido no constituye asesoría de inversión. La
-integración con TradeStation es de solo lectura (cotizaciones) — no coloca órdenes.
+cotizaciones reales de mercado, y el contenido no constituye asesoría de inversión. Las
+integraciones con TradeStation y Alpha Vantage son de solo lectura — no colocan órdenes
+ni dan recomendaciones personalizadas.
