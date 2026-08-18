@@ -9,6 +9,7 @@ const {
   suggestedMultiplier,
   defaultProfitTargetPct,
   profitTargetDollar,
+  parseEarningsCalendarCsv,
 } = require("../logic.js");
 
 function priceRange(legs, hi) {
@@ -120,4 +121,23 @@ test("defaultProfitTargetPct y profitTargetDollar", () => {
   assert.equal(profitTargetDollar(true, Infinity, -300, 100), 300);
   // Bull call spread: ganancia máxima $850 → objetivo 50% = $425.
   assert.equal(profitTargetDollar(false, 850, -150, 50), 425);
+});
+
+test("parseEarningsCalendarCsv: encuentra el próximo reporte de un símbolo", () => {
+  const csv = [
+    "symbol,name,reportDate,fiscalDateEnding,estimate,currency",
+    "AAPL,Apple Inc,2026-01-29,2025-12-31,2.35,USD",
+    "AAPL,Apple Inc,2026-04-30,2026-03-31,1.65,USD",
+    "MSFT,Microsoft Corp,2026-01-27,2025-12-31,3.10,USD",
+  ].join("\n");
+
+  assert.equal(parseEarningsCalendarCsv(csv, "AAPL", "2026-01-01"), "2026-01-29");
+  // Pasada la primera fecha, debe encontrar la siguiente.
+  assert.equal(parseEarningsCalendarCsv(csv, "AAPL", "2026-02-01"), "2026-04-30");
+  // Símbolo distinto no debe confundirse.
+  assert.equal(parseEarningsCalendarCsv(csv, "MSFT", "2026-01-01"), "2026-01-27");
+  // Símbolo sin filas → null.
+  assert.equal(parseEarningsCalendarCsv(csv, "TSLA", "2026-01-01"), null);
+  // Sin fechas futuras en el horizonte → null.
+  assert.equal(parseEarningsCalendarCsv(csv, "AAPL", "2026-05-01"), null);
 });

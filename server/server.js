@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const { parseEarningsCalendarCsv } = require("../logic.js");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +27,41 @@ function requireConfig(req, res, next) {
     });
   }
   next();
+}
+
+const AV_BASE = "https://www.alphavantage.co/query";
+
+function isAVConfigured() {
+  return Boolean(process.env.ALPHAVANTAGE_API_KEY);
+}
+
+function requireAVConfig(req, res, next) {
+  if (!isAVConfigured()) {
+    return res.status(500).json({
+      error:
+        "Alpha Vantage no está configurado todavía. Copia server/.env.example a server/.env y completa ALPHAVANTAGE_API_KEY (gratis en alphavantage.co/support/#api-key).",
+    });
+  }
+  next();
+}
+
+// Cache en memoria simple para no quemar la cuota gratuita de Alpha Vantage (~25 requests/día).
+const avCache = new Map();
+async function cached(key, ttlMs, fetchFn) {
+  const hit = avCache.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.value;
+  const value = await fetchFn();
+  avCache.set(key, { value, at: Date.now() });
+  return value;
+}
+
+async function alphaVantage(params) {
+  const url = `${AV_BASE}?${new URLSearchParams({ ...params, apikey: process.env.ALPHAVANTAGE_API_KEY })}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Alpha Vantage respondió ${resp.status}`);
+  }
+  return resp;
 }
 
 function readTokens() {
@@ -125,6 +161,7 @@ app.get("/api/status", (req, res) => {
     configured: isConfigured(),
     connected: Boolean(readTokens()),
     env: TS_ENV,
+    alphaVantageConfigured: isAVConfigured(),
   });
 });
 
@@ -157,6 +194,61 @@ app.get("/api/options/:symbol", requireConfig, async (req, res) => {
       return res.status(resp.status).json({ error: await resp.text() });
     }
     res.json(await resp.json());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/fundamentals/:symbol", requireAVConfig, async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  try {
+    const data = await cached(`overview:${symbol}`, 60 * 60 * 1000, async () => {
+      const resp = await alphaVantage({ function: "OVERVIEW", symbol });
+      return resp.json();
+    });
+    if (!data || !data.Symbol) {
+      return res.status(404).json({ error: "No se encontraron datos fundamentales para ese símbolo." });
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/earnings/:symbol", requireAVConfig, async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  try {
+    const csv = await cached(`earnings-calendar:${symbol}`, 60 * 60 * 1000, async () => {
+      const resp = await alphaVantage({ function: "EARNINGS_CALENDAR", symbol, horizon: "3month" });
+      return resp.text();
+    });
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const nextReportDate = parseEarningsCalendarCsv(csv, symbol, todayIso);
+    res.json({ symbol, nextReportDate });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/news/:symbol", requireAVConfig, async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  try {
+    const data = await cached(`news:${symbol}`, 15 * 60 * 1000, async () => {
+      const resp = await alphaVantage({ function: "NEWS_SENTIMENT", tickers: symbol, limit: "10" });
+      return resp.json();
+    });
+    if (data.Information || data.Note) {
+      // Alpha Vantage devuelve 200 OK con este cuerpo cuando se excede el límite de la API.
+      return res.status(429).json({ error: data.Information || data.Note });
+    }
+    const items = (data.feed || []).slice(0, 5).map((item) => ({
+      title: item.title,
+      url: item.url,
+      source: item.source,
+      timePublished: item.time_published,
+      sentimentLabel: item.overall_sentiment_label,
+    }));
+    res.json({ symbol, items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

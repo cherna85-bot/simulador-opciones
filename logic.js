@@ -92,6 +92,32 @@
     return basis * (targetPct / 100);
   }
 
+  // Parsea el CSV de Alpha Vantage EARNINGS_CALENDAR (columnas: symbol,name,
+  // reportDate,fiscalDateEnding,estimate,currency) y devuelve la fecha de
+  // reporte futura más cercana para ese símbolo (YYYY-MM-DD), o null si no
+  // hay ninguna en el horizonte pedido a la API.
+  function parseEarningsCalendarCsv(csvText, symbol, todayIso) {
+    const lines = (csvText || "").trim().split(/\r?\n/);
+    if (lines.length < 2) return null;
+    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const symbolIdx = header.indexOf("symbol");
+    const dateIdx = header.indexOf("reportdate");
+    if (symbolIdx === -1 || dateIdx === -1) return null;
+
+    const target = symbol.trim().toUpperCase();
+    let nearest = null;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      if (cols.length <= Math.max(symbolIdx, dateIdx)) continue;
+      if (cols[symbolIdx].trim().toUpperCase() !== target) continue;
+      const rowDate = cols[dateIdx].trim();
+      if (rowDate >= todayIso && (nearest === null || rowDate < nearest)) {
+        nearest = rowDate;
+      }
+    }
+    return nearest;
+  }
+
   return {
     round,
     payoffAt,
@@ -101,5 +127,6 @@
     suggestedMultiplier,
     defaultProfitTargetPct,
     profitTargetDollar,
+    parseEarningsCalendarCsv,
   };
 });

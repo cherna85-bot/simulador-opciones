@@ -138,6 +138,39 @@
     border-color: rgba(248, 113, 113, 0.3);
     font-weight: 600;
   }
+  .fund-summary {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .news-item {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.82rem;
+  }
+  .news-item a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .news-item a:hover {
+    text-decoration: underline;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+  .badge.badge-pos { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+  .badge.badge-neg { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .badge.badge-neu { background: rgba(154, 167, 194, 0.15); color: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -195,6 +228,19 @@
       <div id="riskInfo"></div>
       <div class="note">Las primas por defecto son estimaciones aproximadas (% del precio), no cotizaciones reales de mercado. Edítalas con datos reales de tu bróker para un análisis preciso.</div>
     </div>
+  </div>
+
+  <div class="panel" id="fundPanel" style="display:none; margin-top:20px;">
+    <div class="legs-header" style="margin-top:0;">
+      <h3>Datos fundamentales, earnings y noticias</h3>
+      <span class="desc" id="fundStatusText" style="margin:0;">—</span>
+    </div>
+    <div id="fundSearchRow" style="display:none; gap:6px; margin-top:8px;">
+      <input type="text" id="fundSymbol" placeholder="Símbolo (ej. AAPL)" style="flex:1;">
+      <button class="btn" id="fundSearchBtn" style="white-space:nowrap;">Buscar</button>
+    </div>
+    <p class="desc" id="fundError" style="display:none; color:var(--red); margin-top:6px;"></p>
+    <div id="fundResults"></div>
   </div>
 </div>
 
@@ -643,6 +689,100 @@ loadStrategyDefaults();
     } finally {
       tsQuoteBtn.disabled = false;
       tsQuoteBtn.textContent = "Cotización en vivo";
+    }
+  };
+})();
+
+// ---- Datos fundamentales, earnings y noticias (opcional, requiere el backend + Alpha Vantage) ----
+(async function initFundamentals() {
+  const fundPanel = document.getElementById("fundPanel");
+  const fundStatusText = document.getElementById("fundStatusText");
+  const fundSearchRow = document.getElementById("fundSearchRow");
+  const fundSymbol = document.getElementById("fundSymbol");
+  const fundSearchBtn = document.getElementById("fundSearchBtn");
+  const fundError = document.getElementById("fundError");
+  const fundResults = document.getElementById("fundResults");
+
+  let status;
+  try {
+    const resp = await fetch("/api/status");
+    if (!resp.ok) return; // backend no disponible (p.ej. index.html abierto como archivo)
+    status = await resp.json();
+  } catch {
+    return; // sin backend, el simulador sigue funcionando normal
+  }
+
+  fundPanel.style.display = "block";
+
+  if (!status.alphaVantageConfigured) {
+    fundStatusText.textContent = "No configurado (ver server/.env.example)";
+    return;
+  }
+
+  fundStatusText.textContent = "Listo";
+  fundSearchRow.style.display = "flex";
+
+  function sentimentBadge(label) {
+    const l = (label || "").toLowerCase();
+    let cls = "badge-neu", text = "Neutral";
+    if (l.includes("bullish")) { cls = "badge-pos"; text = "Positivo"; }
+    else if (l.includes("bearish")) { cls = "badge-neg"; text = "Negativo"; }
+    return `<span class="badge ${cls}">${text}</span>`;
+  }
+
+  fundSearchBtn.onclick = async () => {
+    const symbol = fundSymbol.value.trim().toUpperCase();
+    if (!symbol) return;
+    fundSearchBtn.disabled = true;
+    fundSearchBtn.textContent = "Buscando…";
+    fundError.style.display = "none";
+    fundResults.innerHTML = "";
+    try {
+      const [fundResp, earnResp, newsResp] = await Promise.all([
+        fetch(`/api/fundamentals/${encodeURIComponent(symbol)}`),
+        fetch(`/api/earnings/${encodeURIComponent(symbol)}`),
+        fetch(`/api/news/${encodeURIComponent(symbol)}`),
+      ]);
+      const [fund, earn, news] = await Promise.all([fundResp.json(), earnResp.json(), newsResp.json()]);
+      if (!fundResp.ok) throw new Error(fund.error || "Error consultando fundamentales");
+
+      const summary = document.createElement("div");
+      summary.className = "fund-summary";
+      function statLike(label, value) {
+        const div = document.createElement("div");
+        div.className = "stat";
+        div.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
+        summary.appendChild(div);
+      }
+      statLike("Empresa", fund.Name || "—");
+      statLike("Sector", fund.Sector || "—");
+      statLike("Market Cap", fund.MarketCapitalization ? fmt(parseFloat(fund.MarketCapitalization)) : "—");
+      statLike("P/E", fund.PERatio || "—");
+      statLike("Próximo earnings", earnResp.ok && earn.nextReportDate ? earn.nextReportDate : "No detectado en 3 meses");
+      fundResults.appendChild(summary);
+
+      if (newsResp.ok && news.items && news.items.length) {
+        news.items.forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "news-item";
+          div.innerHTML =
+            `<a href="${item.url}" target="_blank" rel="noopener">${item.title}</a>` +
+            sentimentBadge(item.sentimentLabel) +
+            `<div class="desc" style="margin-top:4px;">${item.source || ""}</div>`;
+          fundResults.appendChild(div);
+        });
+      } else if (newsResp.ok) {
+        const div = document.createElement("div");
+        div.className = "desc";
+        div.textContent = "Sin noticias recientes encontradas.";
+        fundResults.appendChild(div);
+      }
+    } catch (err) {
+      fundError.textContent = "No se pudo traer la información: " + err.message;
+      fundError.style.display = "block";
+    } finally {
+      fundSearchBtn.disabled = false;
+      fundSearchBtn.textContent = "Buscar";
     }
   };
 })();
