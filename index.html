@@ -148,7 +148,7 @@
       <p class="desc" id="strategyDesc"></p>
 
       <label for="spotPrice">Precio actual de la acción ($)</label>
-      <input type="number" id="spotPrice" value="100" step="0.5">
+      <input type="number" id="spotPrice" value="100" step="0.5" min="0.01">
 
       <div class="legs-header">
         <h3>Posiciones (legs)</h3>
@@ -266,9 +266,13 @@ for (const key in STRATEGIES) {
   strategySel.appendChild(opt);
 }
 
+function getSpot() {
+  return Math.max(parseFloat(spotInput.value) || 100, 0.01);
+}
+
 function loadStrategyDefaults() {
   const key = strategySel.value;
-  const P = parseFloat(spotInput.value) || 100;
+  const P = getSpot();
   legs = STRATEGIES[key].legs(P).map(l => ({...l}));
   strategyDesc.textContent = STRATEGIES[key].desc;
   renderLegs();
@@ -353,7 +357,7 @@ function renderLegs() {
 }
 
 document.getElementById("addLeg").onclick = () => {
-  const P = parseFloat(spotInput.value) || 100;
+  const P = getSpot();
   legs.push({ kind:"call", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 });
   renderLegs();
   render();
@@ -364,7 +368,7 @@ strategySel.onchange = loadStrategyDefaults;
 spotInput.oninput = render;
 
 function render() {
-  const P = parseFloat(spotInput.value) || 100;
+  const P = getSpot();
   // Range spans down to $0 so strategies holding stock show their true max loss
   // (a stock position can fall to zero; pure option legs simply stay flat below the range).
   const lo = 0, hi = P * 2;
