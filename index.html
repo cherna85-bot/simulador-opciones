@@ -367,6 +367,26 @@ function fmt(n) {
   return sign + "$" + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Escapa texto que viene de fuentes externas (Alpha Vantage, etc.) antes de
+// insertarlo vía innerHTML, para no quedar expuestos a XSS si esos datos
+// llegaran a contener HTML/script.
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+// Solo permite enlaces http(s) (bloquea javascript:, data:, etc.) antes de
+// usarlos como href de un link generado con contenido externo.
+function safeUrl(url) {
+  try {
+    const u = new URL(url, location.href);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : "#";
+  } catch {
+    return "#";
+  }
+}
+
 let legs = [];
 
 const strategySel = document.getElementById("strategy");
@@ -918,7 +938,7 @@ loadStrategyDefaults();
       function statLike(label, value) {
         const div = document.createElement("div");
         div.className = "stat";
-        div.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
+        div.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div>`;
         summary.appendChild(div);
       }
       statLike("Empresa", fund.Name || "—");
@@ -937,8 +957,8 @@ loadStrategyDefaults();
           warn.className = "risk-block warn";
           warn.style.marginTop = "10px";
           warn.innerHTML =
-            `⚠ Si tu posición es sobre <strong>${symbol}</strong>: el próximo earnings ` +
-            `(${earn.nextReportDate}, en ${ew.daysUntilEarnings} día${ew.daysUntilEarnings === 1 ? "" : "s"}) ` +
+            `⚠ Si tu posición es sobre <strong>${escapeHtml(symbol)}</strong>: el próximo earnings ` +
+            `(${escapeHtml(earn.nextReportDate)}, en ${ew.daysUntilEarnings} día${ew.daysUntilEarnings === 1 ? "" : "s"}) ` +
             `cae dentro de tus ${dte} días a vencimiento configurados — la volatilidad implícita suele ` +
             `moverse fuerte alrededor de esa fecha.`;
           fundResults.appendChild(warn);
@@ -950,9 +970,9 @@ loadStrategyDefaults();
           const div = document.createElement("div");
           div.className = "news-item";
           div.innerHTML =
-            `<a href="${item.url}" target="_blank" rel="noopener">${item.title}</a>` +
+            `<a href="${escapeHtml(safeUrl(item.url))}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>` +
             sentimentBadge(item.sentimentLabel) +
-            `<div class="desc" style="margin-top:4px;">${item.source || ""}</div>`;
+            `<div class="desc" style="margin-top:4px;">${escapeHtml(item.source || "")}</div>`;
           fundResults.appendChild(div);
         });
       } else if (newsResp.ok) {
