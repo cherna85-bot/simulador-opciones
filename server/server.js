@@ -55,9 +55,29 @@ async function cached(key, ttlMs, fetchFn) {
   return value;
 }
 
+// Alpha Vantage's free tier rejects bursts faster than ~1 request/second, and
+// the frontend fires fundamentals/earnings/news for the same symbol in
+// parallel — so every AV call is serialized through this queue with a
+// minimum gap between requests, regardless of how many arrive at once.
+const AV_MIN_GAP_MS = 1100;
+let avQueue = Promise.resolve();
+
+function queuedFetch(url) {
+  const result = avQueue.then(async () => {
+    const resp = await fetch(url);
+    await new Promise((resolve) => setTimeout(resolve, AV_MIN_GAP_MS));
+    return resp;
+  });
+  avQueue = result.then(
+    () => {},
+    () => {}
+  );
+  return result;
+}
+
 async function alphaVantage(params) {
   const url = `${AV_BASE}?${new URLSearchParams({ ...params, apikey: process.env.ALPHAVANTAGE_API_KEY })}`;
-  const resp = await fetch(url);
+  const resp = await queuedFetch(url);
   if (!resp.ok) {
     throw new Error(`Alpha Vantage respondió ${resp.status}`);
   }
