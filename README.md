@@ -75,6 +75,10 @@ earnings, y hasta 5 noticias recientes con su sentimiento (positivo/neutral/nega
 El tier gratuito de Alpha Vantage permite ~25 requests/día — el backend cachea
 las respuestas (1h fundamentales/earnings, 15min noticias) para no agotarlo.
 
+Si buscás un símbolo y su próximo earnings cae dentro de los "días a vencimiento"
+que configuraste en la sección de Black-Scholes, aparece una advertencia — la
+volatilidad implícita suele moverse fuerte alrededor de un reporte de resultados.
+
 ## Aviso
 
 Es una herramienta educativa. Las primas por defecto son estimaciones aproximadas, no
