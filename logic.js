@@ -118,6 +118,25 @@
     return nearest;
   }
 
+  // Días de calendario entre dos fechas ISO (YYYY-MM-DD), redondeado.
+  // Positivo si dateIso es futuro respecto a todayIso.
+  function daysUntil(dateIso, todayIso) {
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const target = new Date(dateIso + "T00:00:00Z").getTime();
+    const today = new Date(todayIso + "T00:00:00Z").getTime();
+    return Math.round((target - today) / MS_PER_DAY);
+  }
+
+  // ¿El próximo earnings cae dentro de la ventana de días a vencimiento de la
+  // posición? Útil porque la volatilidad implícita suele moverse fuerte
+  // alrededor de un reporte de resultados.
+  function earningsWithinDte(nextReportDateIso, todayIso, dte) {
+    if (!nextReportDateIso) return { within: false, daysUntilEarnings: null };
+    const daysUntilEarnings = daysUntil(nextReportDateIso, todayIso);
+    const within = daysUntilEarnings >= 0 && daysUntilEarnings <= dte;
+    return { within, daysUntilEarnings };
+  }
+
   // Aproximación de Abramowitz & Stegun (precisión ~1e-7) para la función de
   // distribución acumulada normal estándar — evita depender de una librería.
   function normCdf(x) {
@@ -214,6 +233,8 @@
     defaultProfitTargetPct,
     profitTargetDollar,
     parseEarningsCalendarCsv,
+    daysUntil,
+    earningsWithinDte,
     normCdf,
     blackScholes,
     theoPayoffAt,

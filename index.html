@@ -269,6 +269,7 @@ const {
   profitTargetDollar,
   theoPayoffAt,
   positionGreeks,
+  earningsWithinDte,
 } = OptionsLogic;
 
 const RISK_FREE_RATE = 0.04; // aproximación fija, no configurable (mantiene la UI simple)
@@ -816,6 +817,23 @@ loadStrategyDefaults();
       statLike("P/E", fund.PERatio || "—");
       statLike("Próximo earnings", earnResp.ok && earn.nextReportDate ? earn.nextReportDate : "No detectado en 3 meses");
       fundResults.appendChild(summary);
+
+      if (earnResp.ok && earn.nextReportDate) {
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const dte = getDte();
+        const ew = earningsWithinDte(earn.nextReportDate, todayIso, dte);
+        if (ew.within) {
+          const warn = document.createElement("div");
+          warn.className = "risk-block warn";
+          warn.style.marginTop = "10px";
+          warn.innerHTML =
+            `⚠ Si tu posición es sobre <strong>${symbol}</strong>: el próximo earnings ` +
+            `(${earn.nextReportDate}, en ${ew.daysUntilEarnings} día${ew.daysUntilEarnings === 1 ? "" : "s"}) ` +
+            `cae dentro de tus ${dte} días a vencimiento configurados — la volatilidad implícita suele ` +
+            `moverse fuerte alrededor de esa fecha.`;
+          fundResults.appendChild(warn);
+        }
+      }
 
       if (newsResp.ok && news.items && news.items.length) {
         news.items.forEach((item) => {

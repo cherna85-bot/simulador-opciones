@@ -10,6 +10,8 @@ const {
   defaultProfitTargetPct,
   profitTargetDollar,
   parseEarningsCalendarCsv,
+  daysUntil,
+  earningsWithinDte,
   blackScholes,
   theoPayoffAt,
   positionGreeks,
@@ -192,4 +194,27 @@ test("positionGreeks: delta de una acción larga es su cantidad; long call tiene
   const g = positionGreeks(callLegs, 100, 30 / 365, 0.05, 0.3);
   assert.ok(g.delta > 0 && g.delta < 100, `delta=${g.delta}`); // delta * 100 acciones, entre 0 y 1 por acción
   assert.ok(g.theta < 0, `theta=${g.theta}`); // comprar opciones pierde valor con el paso del tiempo
+});
+
+test("daysUntil: cuenta días de calendario entre dos fechas ISO", () => {
+  assert.equal(daysUntil("2026-08-25", "2026-08-18"), 7);
+  assert.equal(daysUntil("2026-08-18", "2026-08-18"), 0);
+  assert.equal(daysUntil("2026-08-10", "2026-08-18"), -8); // fecha pasada → negativo
+});
+
+test("earningsWithinDte: detecta si el próximo earnings cae dentro de la ventana de vencimiento", () => {
+  // Earnings en 7 días, posición a 30 días → cae dentro de la ventana.
+  const within = earningsWithinDte("2026-08-25", "2026-08-18", 30);
+  assert.equal(within.within, true);
+  assert.equal(within.daysUntilEarnings, 7);
+
+  // Earnings en 45 días, posición a 30 días → no llega a cubrirlo.
+  const outside = earningsWithinDte("2026-10-02", "2026-08-18", 30);
+  assert.equal(outside.within, false);
+
+  // Sin fecha de earnings conocida → nunca "within".
+  assert.equal(earningsWithinDte(null, "2026-08-18", 30).within, false);
+
+  // Earnings ya pasado (no debería pasar en la práctica, pero por robustez).
+  assert.equal(earningsWithinDte("2026-08-01", "2026-08-18", 30).within, false);
 });
