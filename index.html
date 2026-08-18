@@ -131,6 +131,18 @@
 
   <div class="grid">
     <div class="panel">
+      <div id="tsPanel" style="display:none;">
+        <div class="legs-header" style="margin-top:0;">
+          <h3>TradeStation</h3>
+          <span class="desc" id="tsStatusText" style="margin:0;">—</span>
+        </div>
+        <a id="tsConnectBtn" class="btn" href="/auth/login" style="display:none; text-decoration:none; margin-top:8px;">Conectar cuenta</a>
+        <div id="tsQuoteRow" style="display:none; gap:6px; margin-top:8px;">
+          <input type="text" id="tsSymbol" placeholder="Símbolo (ej. AAPL)" style="flex:1;">
+          <button class="btn" id="tsQuoteBtn" style="white-space:nowrap;">Cotización en vivo</button>
+        </div>
+      </div>
+
       <label for="strategy">Estrategia</label>
       <select id="strategy"></select>
       <p class="desc" id="strategyDesc"></p>
@@ -508,6 +520,62 @@ function render() {
 }
 
 loadStrategyDefaults();
+
+// ---- Integración TradeStation (opcional, requiere el backend local en server/) ----
+(async function initTradeStation() {
+  const tsPanel = document.getElementById("tsPanel");
+  const tsStatusText = document.getElementById("tsStatusText");
+  const tsConnectBtn = document.getElementById("tsConnectBtn");
+  const tsQuoteRow = document.getElementById("tsQuoteRow");
+  const tsSymbol = document.getElementById("tsSymbol");
+  const tsQuoteBtn = document.getElementById("tsQuoteBtn");
+
+  let status;
+  try {
+    const resp = await fetch("/api/status");
+    if (!resp.ok) return; // backend no disponible (p.ej. index.html abierto como archivo)
+    status = await resp.json();
+  } catch {
+    return; // sin backend, el simulador sigue funcionando normal
+  }
+
+  tsPanel.style.display = "block";
+
+  if (!status.configured) {
+    tsStatusText.textContent = "No configurado (ver server/.env.example)";
+    return;
+  }
+
+  if (!status.connected) {
+    tsStatusText.textContent = `No conectado (${status.env.toUpperCase()})`;
+    tsConnectBtn.style.display = "inline-block";
+    return;
+  }
+
+  tsStatusText.textContent = `Conectado ✓ (${status.env.toUpperCase()})`;
+  tsQuoteRow.style.display = "flex";
+
+  tsQuoteBtn.onclick = async () => {
+    const symbol = tsSymbol.value.trim().toUpperCase();
+    if (!symbol) return;
+    tsQuoteBtn.disabled = true;
+    tsQuoteBtn.textContent = "Consultando…";
+    try {
+      const resp = await fetch(`/api/quote/${encodeURIComponent(symbol)}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Error consultando cotización");
+      const last = data?.Quotes?.[0]?.Last;
+      if (!last) throw new Error("No se encontró precio para ese símbolo");
+      spotInput.value = round(parseFloat(last));
+      render();
+    } catch (err) {
+      alert("No se pudo traer la cotización: " + err.message);
+    } finally {
+      tsQuoteBtn.disabled = false;
+      tsQuoteBtn.textContent = "Cotización en vivo";
+    }
+  };
+})();
 </script>
 </body>
 </html>
