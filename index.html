@@ -81,6 +81,9 @@
     font-size: 0.8rem;
   }
   .leg-row select, .leg-row input { padding: 6px 8px; font-size: 0.8rem; }
+  @media (max-width: 480px) {
+    .leg-row { grid-template-columns: repeat(3, 1fr); row-gap: 6px; }
+  }
   .leg-remove {
     background: transparent;
     border: none;
