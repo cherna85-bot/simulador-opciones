@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Estrategias de Opciones</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --panel-2: #1e2740;
+    --border: #2a3550;
+    --text: #e7ecf7;
+    --text-dim: #9aa7c2;
+    --accent: #5b8cff;
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .subtitle { color: var(--text-dim); margin-bottom: 24px; font-size: 0.92rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; margin-top: 14px; }
+  label:first-child { margin-top: 0; }
+  select, input {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  select:focus, input:focus { outline: 1px solid var(--accent); }
+  .legs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+  }
+  .legs-header h3 { font-size: 0.85rem; color: var(--text-dim); margin: 0; text-transform: uppercase; letter-spacing: 0.04em; }
+  .btn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 600; }
+  .leg-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 0.8rem;
+  }
+  .leg-row select, .leg-row input { padding: 6px 8px; font-size: 0.8rem; }
+  .leg-remove {
+    background: transparent;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0 4px;
+  }
+  canvas { width: 100%; height: 380px; display: block; background: var(--panel-2); border-radius: 10px; }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .stat {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat .label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat .value { font-size: 1.15rem; font-weight: 700; margin-top: 4px; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .note {
+    margin-top: 16px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    border-radius: 8px;
+  }
+  .desc {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin-top: 10px;
+    line-height: 1.45;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Simulador de Estrategias de Opciones</h1>
+  <p class="subtitle">Ajusta la estrategia, strikes y primas — visualiza la ganancia/pérdida al vencimiento. Herramienta educativa, no es asesoría de inversión.</p>
+
+  <div class="grid">
+    <div class="panel">
+      <label>Estrategia</label>
+      <select id="strategy"></select>
+      <p class="desc" id="strategyDesc"></p>
+
+      <label>Precio actual de la acción ($)</label>
+      <input type="number" id="spotPrice" value="100" step="0.5">
+
+      <div class="legs-header">
+        <h3>Posiciones (legs)</h3>
+        <button class="btn" id="addLeg">+ Agregar</button>
+      </div>
+      <div id="legsContainer"></div>
+
+      <div class="legs-header" style="margin-top:20px;">
+        <h3>&nbsp;</h3>
+        <button class="btn btn-primary" id="reset">Restablecer valores por defecto</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <canvas id="chart" width="900" height="380"></canvas>
+      <div class="stats" id="stats"></div>
+      <div class="note">Las primas por defecto son estimaciones aproximadas (% del precio), no cotizaciones reales de mercado. Edítalas con datos reales de tu bróker para un análisis preciso.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STRATEGIES = {
+  long_call: {
+    name: "Long Call",
+    desc: "Compras un call. Ganancia ilimitada si sube, pérdida limitada a la prima pagada.",
+    legs: (P) => [{ kind:"call", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 }]
+  },
+  long_put: {
+    name: "Long Put",
+    desc: "Compras un put. Ganancia grande si baja, pérdida limitada a la prima pagada.",
+    legs: (P) => [{ kind:"put", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 }]
+  },
+  covered_call: {
+    name: "Covered Call",
+    desc: "Tienes 100 acciones y vendes un call sobre ellas para generar ingreso, a cambio de limitar la ganancia al alza.",
+    legs: (P) => [
+      { kind:"stock", action:"buy", entryPrice:round(P), qty:100 },
+      { kind:"call", action:"sell", strike:round(P*1.05), premium:round(P*0.02), qty:1 }
+    ]
+  },
+  protective_put: {
+    name: "Protective Put",
+    desc: "Tienes 100 acciones y compras un put como 'seguro' contra caídas fuertes.",
+    legs: (P) => [
+      { kind:"stock", action:"buy", entryPrice:round(P), qty:100 },
+      { kind:"put", action:"buy", strike:round(P*0.95), premium:round(P*0.02), qty:1 }
+    ]
+  },
+  bull_call_spread: {
+    name: "Bull Call Spread",
+    desc: "Compras un call y vendes otro más alto. Alcista moderado, riesgo y ganancia limitados.",
+    legs: (P) => [
+      { kind:"call", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 },
+      { kind:"call", action:"sell", strike:round(P*1.1), premium:round(P*0.015), qty:1 }
+    ]
+  },
+  bear_put_spread: {
+    name: "Bear Put Spread",
+    desc: "Compras un put y vendes otro más bajo. Bajista moderado, riesgo y ganancia limitados.",
+    legs: (P) => [
+      { kind:"put", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 },
+      { kind:"put", action:"sell", strike:round(P*0.9), premium:round(P*0.015), qty:1 }
+    ]
+  },
+  straddle: {
+    name: "Long Straddle",
+    desc: "Compras call y put al mismo strike. Ganas si hay movimiento fuerte en cualquier dirección.",
+    legs: (P) => [
+      { kind:"call", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 },
+      { kind:"put", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 }
+    ]
+  },
+  strangle: {
+    name: "Long Strangle",
+    desc: "Como el straddle pero con strikes distintos (más barato), necesita más movimiento para ganar.",
+    legs: (P) => [
+      { kind:"call", action:"buy", strike:round(P*1.05), premium:round(P*0.02), qty:1 },
+      { kind:"put", action:"buy", strike:round(P*0.95), premium:round(P*0.02), qty:1 }
+    ]
+  },
+  iron_condor: {
+    name: "Iron Condor",
+    desc: "Vendes un put spread y un call spread. Ganas si el precio se mantiene dentro de un rango.",
+    legs: (P) => [
+      { kind:"put", action:"buy", strike:round(P*0.90), premium:round(P*0.01), qty:1 },
+      { kind:"put", action:"sell", strike:round(P*0.95), premium:round(P*0.02), qty:1 },
+      { kind:"call", action:"sell", strike:round(P*1.05), premium:round(P*0.02), qty:1 },
+      { kind:"call", action:"buy", strike:round(P*1.10), premium:round(P*0.01), qty:1 }
+    ]
+  }
+};
+
+function round(n) { return Math.round(n * 100) / 100; }
+function fmt(n) {
+  const sign = n < 0 ? "-" : "";
+  return sign + "$" + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+let legs = [];
+
+const strategySel = document.getElementById("strategy");
+const spotInput = document.getElementById("spotPrice");
+const legsContainer = document.getElementById("legsContainer");
+const strategyDesc = document.getElementById("strategyDesc");
+const canvas = document.getElementById("chart");
+const ctx = canvas.getContext("2d");
+
+for (const key in STRATEGIES) {
+  const opt = document.createElement("option");
+  opt.value = key;
+  opt.textContent = STRATEGIES[key].name;
+  strategySel.appendChild(opt);
+}
+
+function loadStrategyDefaults() {
+  const key = strategySel.value;
+  const P = parseFloat(spotInput.value) || 100;
+  legs = STRATEGIES[key].legs(P).map(l => ({...l}));
+  strategyDesc.textContent = STRATEGIES[key].desc;
+  renderLegs();
+  render();
+}
+
+function renderLegs() {
+  legsContainer.innerHTML = "";
+  legs.forEach((leg, i) => {
+    const row = document.createElement("div");
+    row.className = "leg-row";
+
+    const kindSel = document.createElement("select");
+    ["call","put","stock"].forEach(k => {
+      const o = document.createElement("option");
+      o.value = k; o.textContent = k;
+      if (leg.kind === k) o.selected = true;
+      kindSel.appendChild(o);
+    });
+    kindSel.onchange = () => { leg.kind = kindSel.value; renderLegs(); render(); };
+
+    const actionSel = document.createElement("select");
+    ["buy","sell"].forEach(a => {
+      const o = document.createElement("option");
+      o.value = a; o.textContent = a === "buy" ? "compra" : "venta";
+      if (leg.action === a) o.selected = true;
+      actionSel.appendChild(o);
+    });
+    actionSel.onchange = () => { leg.action = actionSel.value; render(); };
+
+    row.appendChild(kindSel);
+    row.appendChild(actionSel);
+
+    if (leg.kind === "stock") {
+      const priceInput = document.createElement("input");
+      priceInput.type = "number"; priceInput.step = "0.5";
+      priceInput.value = leg.entryPrice;
+      priceInput.placeholder = "precio entrada";
+      priceInput.oninput = () => { leg.entryPrice = parseFloat(priceInput.value) || 0; render(); };
+      row.appendChild(priceInput);
+
+      const spacer1 = document.createElement("div");
+      row.appendChild(spacer1);
+
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number"; qtyInput.step = "1";
+      qtyInput.value = leg.qty;
+      qtyInput.placeholder = "acciones";
+      qtyInput.oninput = () => { leg.qty = parseFloat(qtyInput.value) || 0; render(); };
+      row.appendChild(qtyInput);
+    } else {
+      const strikeInput = document.createElement("input");
+      strikeInput.type = "number"; strikeInput.step = "0.5";
+      strikeInput.value = leg.strike;
+      strikeInput.placeholder = "strike";
+      strikeInput.oninput = () => { leg.strike = parseFloat(strikeInput.value) || 0; render(); };
+      row.appendChild(strikeInput);
+
+      const premInput = document.createElement("input");
+      premInput.type = "number"; premInput.step = "0.01";
+      premInput.value = leg.premium;
+      premInput.placeholder = "prima";
+      premInput.oninput = () => { leg.premium = parseFloat(premInput.value) || 0; render(); };
+      row.appendChild(premInput);
+
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number"; qtyInput.step = "1";
+      qtyInput.value = leg.qty;
+      qtyInput.placeholder = "contratos";
+      qtyInput.oninput = () => { leg.qty = parseFloat(qtyInput.value) || 0; render(); };
+      row.appendChild(qtyInput);
+    }
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "leg-remove";
+    removeBtn.textContent = "✕";
+    removeBtn.onclick = () => { legs.splice(i, 1); renderLegs(); render(); };
+    row.appendChild(removeBtn);
+
+    legsContainer.appendChild(row);
+  });
+}
+
+document.getElementById("addLeg").onclick = () => {
+  const P = parseFloat(spotInput.value) || 100;
+  legs.push({ kind:"call", action:"buy", strike:round(P), premium:round(P*0.03), qty:1 });
+  renderLegs();
+  render();
+};
+
+document.getElementById("reset").onclick = loadStrategyDefaults;
+strategySel.onchange = loadStrategyDefaults;
+spotInput.oninput = render;
+
+function payoffAt(S) {
+  let total = 0;
+  for (const leg of legs) {
+    if (leg.kind === "stock") {
+      const dir = leg.action === "buy" ? 1 : -1;
+      total += (S - leg.entryPrice) * leg.qty * dir;
+    } else {
+      const intrinsic = leg.kind === "call" ? Math.max(S - leg.strike, 0) : Math.max(leg.strike - S, 0);
+      const perShare = leg.action === "buy" ? (intrinsic - leg.premium) : (leg.premium - intrinsic);
+      total += perShare * leg.qty * 100;
+    }
+  }
+  return total;
+}
+
+function computeStats(prices, payoffs) {
+  const N = payoffs.length - 1;
+  const maxProfit = Math.max(...payoffs);
+  const maxLoss = Math.min(...payoffs);
+
+  // breakevens: sign changes
+  const breakevens = [];
+  for (let i = 1; i < prices.length; i++) {
+    const a = payoffs[i-1], b = payoffs[i];
+    if ((a < 0 && b >= 0) || (a > 0 && b <= 0)) {
+      const t = a === b ? 0 : (0 - a) / (b - a);
+      breakevens.push(round(prices[i-1] + t * (prices[i] - prices[i-1])));
+    }
+  }
+
+  // Only the upside (S -> infinity) can be truly unbounded, since price can't go below 0.
+  // Detect a persistent non-zero slope at the right edge of the simulated range.
+  const dRight = (payoffs[N] - payoffs[N-1]) / (prices[N] - prices[N-1]);
+  const epsilon = 0.01; // $ payoff change per $1 of stock price
+  const nearMax = Math.abs(payoffs[N] - maxProfit) < 1e-6;
+  const nearMin = Math.abs(payoffs[N] - maxLoss) < 1e-6;
+
+  const profitUnlimited = dRight > epsilon && nearMax;
+  const lossUnlimited = dRight < -epsilon && nearMin;
+
+  return { maxProfit, maxLoss, breakevens, profitUnlimited, lossUnlimited };
+}
+
+function render() {
+  const P = parseFloat(spotInput.value) || 100;
+  // Range spans down to $0 so strategies holding stock show their true max loss
+  // (a stock position can fall to zero; pure option legs simply stay flat below the range).
+  const lo = 0, hi = P * 2;
+  const N = 240;
+  const prices = [];
+  const payoffs = [];
+  for (let i = 0; i <= N; i++) {
+    const S = lo + (hi - lo) * (i / N);
+    prices.push(S);
+    payoffs.push(payoffAt(S));
+  }
+
+  const stats = computeStats(prices, payoffs);
+
+  // ---- draw chart ----
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const padL = 60, padR = 20, padT = 20, padB = 36;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const minY = Math.min(...payoffs, 0);
+  const maxY = Math.max(...payoffs, 0);
+  const yPad = (maxY - minY) * 0.1 || 10;
+  const yLo = minY - yPad, yHi = maxY + yPad;
+
+  const xOf = (S) => padL + ((S - lo) / (hi - lo)) * plotW;
+  const yOf = (v) => padT + (1 - (v - yLo) / (yHi - yLo)) * plotH;
+
+  // grid + axes
+  ctx.strokeStyle = "#2a3550";
+  ctx.lineWidth = 1;
+  ctx.font = "11px sans-serif";
+  ctx.fillStyle = "#9aa7c2";
+
+  for (let i = 0; i <= 4; i++) {
+    const S = lo + (hi - lo) * (i / 4);
+    const x = xOf(S);
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H - padB); ctx.stroke();
+    ctx.fillText("$" + Math.round(S), x - 14, H - padB + 16);
+  }
+  for (let i = 0; i <= 4; i++) {
+    const v = yLo + (yHi - yLo) * (i / 4);
+    const y = yOf(v);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillText(fmt(v), 4, y + 4);
+  }
+
+  // zero line
+  ctx.strokeStyle = "#5b6685";
+  ctx.lineWidth = 1.5;
+  const zy = yOf(0);
+  ctx.beginPath(); ctx.moveTo(padL, zy); ctx.lineTo(W - padR, zy); ctx.stroke();
+
+  // current price line
+  ctx.strokeStyle = "#fbbf24";
+  ctx.setLineDash([4, 4]);
+  const cx = xOf(P);
+  ctx.beginPath(); ctx.moveTo(cx, padT); ctx.lineTo(cx, H - padB); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#fbbf24";
+  ctx.fillText("precio actual", cx + 6, padT + 12);
+
+  // payoff curve with fill
+  ctx.beginPath();
+  prices.forEach((S, i) => {
+    const x = xOf(S), y = yOf(payoffs[i]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#5b8cff";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // shaded profit/loss areas
+  for (let i = 1; i < prices.length; i++) {
+    const x0 = xOf(prices[i-1]), x1 = xOf(prices[i]);
+    const y0 = yOf(payoffs[i-1]), y1 = yOf(payoffs[i]);
+    const positive = (payoffs[i-1] + payoffs[i]) / 2 >= 0;
+    ctx.fillStyle = positive ? "rgba(52,211,153,0.15)" : "rgba(248,113,113,0.15)";
+    ctx.beginPath();
+    ctx.moveTo(x0, zy);
+    ctx.lineTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x1, zy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ---- stats panel ----
+  const statsEl = document.getElementById("stats");
+  statsEl.innerHTML = "";
+
+  function statBox(label, value, cls) {
+    const div = document.createElement("div");
+    div.className = "stat";
+    div.innerHTML = `<div class="label">${label}</div><div class="value ${cls||""}">${value}</div>`;
+    statsEl.appendChild(div);
+  }
+
+  statBox("Ganancia máxima", stats.profitUnlimited ? "Ilimitada" : fmt(stats.maxProfit), "pos");
+  statBox("Pérdida máxima", stats.lossUnlimited ? "Ilimitada" : fmt(stats.maxLoss), "neg");
+  statBox("Breakeven(s)", stats.breakevens.length ? stats.breakevens.map(b => "$" + b.toFixed(2)).join(" / ") : "—");
+
+  let netCost = 0;
+  for (const leg of legs) {
+    if (leg.kind !== "stock") {
+      const dir = leg.action === "buy" ? 1 : -1;
+      netCost += leg.premium * leg.qty * 100 * dir;
+    }
+  }
+  statBox(netCost >= 0 ? "Débito neto (opciones)" : "Crédito neto (opciones)", fmt(Math.abs(netCost)));
+}
+
+loadStrategyDefaults();
+</script>
+</body>
+</html>
