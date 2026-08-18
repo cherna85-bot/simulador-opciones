@@ -1,6 +1,25 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { round, payoffAt, computeStats } = require("../logic.js");
+const {
+  round,
+  payoffAt,
+  computeStats,
+  findCrossings,
+  riskRewardRatio,
+  suggestedMultiplier,
+  defaultProfitTargetPct,
+  profitTargetDollar,
+} = require("../logic.js");
+
+function priceRange(legs, hi) {
+  const prices = [];
+  const payoffs = [];
+  for (let i = 0; i <= hi; i++) {
+    prices.push(i);
+    payoffs.push(payoffAt(legs, i));
+  }
+  return { prices, payoffs };
+}
 
 test("round redondea a 2 decimales", () => {
   assert.equal(round(1.234), 1.23);
@@ -55,4 +74,50 @@ test("computeStats: encuentra el breakeven y la pérdida máxima de un long call
   assert.equal(stats.lossUnlimited, false);
   assert.equal(stats.breakevens.length, 1);
   assert.ok(Math.abs(stats.breakevens[0] - 103) < 1); // strike + prima
+});
+
+test("findCrossings: encuentra dónde el payoff cruza un objetivo de ganancia (no solo cero)", () => {
+  const legs = [
+    { kind: "call", action: "buy", strike: 100, premium: 3, qty: 1 },
+    { kind: "call", action: "sell", strike: 110, premium: 1.5, qty: 1 },
+  ];
+  const { prices, payoffs } = priceRange(legs, 200);
+  // Entre S=100 (-150) y S=110 (850) el payoff es lineal: 100*(S-101.5).
+  // Cruza $425 (50% del máximo) en S=105.75.
+  const crossings = findCrossings(prices, payoffs, 425);
+  assert.equal(crossings.length, 1);
+  assert.ok(Math.abs(crossings[0] - 105.75) < 0.1);
+});
+
+test("riskRewardRatio: bounded, ganancia ilimitada y riesgo indefinido", () => {
+  assert.equal(riskRewardRatio(850, -150, false, false).ratio, 850 / 150);
+  assert.equal(riskRewardRatio(850, -150, false, false).label, "1 : " + (850 / 150).toFixed(2));
+
+  const unlimitedProfit = riskRewardRatio(Infinity, -300, true, false);
+  assert.equal(unlimitedProfit.ratio, null);
+  assert.equal(unlimitedProfit.label, "Ganancia ilimitada");
+
+  const unlimitedLoss = riskRewardRatio(300, -Infinity, false, true);
+  assert.equal(unlimitedLoss.ratio, null);
+  assert.equal(unlimitedLoss.label, "Riesgo indefinido");
+});
+
+test("suggestedMultiplier: escala la posición según el presupuesto de riesgo", () => {
+  // Pérdida máxima -$300 por unidad, presupuesto de riesgo $1000 → alcanza para 3x.
+  assert.equal(suggestedMultiplier(-300, false, 1000).multiplier, 3);
+  assert.equal(suggestedMultiplier(-300, false, 1000).warning, null);
+
+  const undefinedRisk = suggestedMultiplier(-300, true, 1000);
+  assert.equal(undefinedRisk.multiplier, null);
+  assert.ok(undefinedRisk.warning);
+});
+
+test("defaultProfitTargetPct y profitTargetDollar", () => {
+  assert.equal(defaultProfitTargetPct(true), 100); // ganancia ilimitada → % de retorno sobre la prima
+  assert.equal(defaultProfitTargetPct(false), 50); // riesgo/beneficio definido → % de la ganancia máxima
+
+  // Long call: ganancia ilimitada, prima pagada $300 → objetivo 100% = $300.
+  assert.equal(profitTargetDollar(true, Infinity, -300, 100), 300);
+  // Bull call spread: ganancia máxima $850 → objetivo 50% = $425.
+  assert.equal(profitTargetDollar(false, 850, -150, 50), 425);
 });

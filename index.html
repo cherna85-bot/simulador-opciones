@@ -122,6 +122,22 @@
     margin-top: 10px;
     line-height: 1.45;
   }
+  .risk-block {
+    margin-top: 12px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .risk-block.warn {
+    color: var(--red);
+    background: rgba(248, 113, 113, 0.08);
+    border-color: rgba(248, 113, 113, 0.3);
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -158,6 +174,16 @@
       <div id="legsContainer"></div>
 
       <div class="legs-header" style="margin-top:20px;">
+        <h3>Control de riesgo y ganancia</h3>
+      </div>
+      <label for="riskCapital">Capital total ($)</label>
+      <input type="number" id="riskCapital" value="10000" step="100" min="0">
+      <label for="riskPct">% a arriesgar en esta operación</label>
+      <input type="number" id="riskPct" value="2" step="0.5" min="0.1" max="100">
+      <label for="targetPct">% objetivo de ganancia</label>
+      <input type="number" id="targetPct" value="100" step="5" min="1" max="1000">
+
+      <div class="legs-header" style="margin-top:20px;">
         <h3>&nbsp;</h3>
         <button class="btn btn-primary" id="reset">Restablecer valores por defecto</button>
       </div>
@@ -166,6 +192,7 @@
     <div class="panel">
       <canvas id="chart" width="900" height="380"></canvas>
       <div class="stats" id="stats"></div>
+      <div id="riskInfo"></div>
       <div class="note">Las primas por defecto son estimaciones aproximadas (% del precio), no cotizaciones reales de mercado. Edítalas con datos reales de tu bróker para un análisis preciso.</div>
     </div>
   </div>
@@ -173,7 +200,16 @@
 
 <script src="logic.js"></script>
 <script>
-const { round, payoffAt, computeStats } = OptionsLogic;
+const {
+  round,
+  payoffAt,
+  computeStats,
+  findCrossings,
+  riskRewardRatio,
+  suggestedMultiplier,
+  defaultProfitTargetPct,
+  profitTargetDollar,
+} = OptionsLogic;
 
 const STRATEGIES = {
   long_call: {
@@ -259,6 +295,20 @@ const legsContainer = document.getElementById("legsContainer");
 const strategyDesc = document.getElementById("strategyDesc");
 const canvas = document.getElementById("chart");
 const ctx = canvas.getContext("2d");
+const riskCapitalInput = document.getElementById("riskCapital");
+const riskPctInput = document.getElementById("riskPct");
+const targetPctInput = document.getElementById("targetPct");
+const riskInfoEl = document.getElementById("riskInfo");
+
+function getCapital() {
+  return Math.max(parseFloat(riskCapitalInput.value) || 0, 0);
+}
+function getRiskPct() {
+  return Math.min(Math.max(parseFloat(riskPctInput.value) || 0.1, 0.1), 100);
+}
+function getTargetPct() {
+  return Math.max(parseFloat(targetPctInput.value) || 1, 1);
+}
 
 for (const key in STRATEGIES) {
   const opt = document.createElement("option");
@@ -273,6 +323,8 @@ function loadStrategyDefaults() {
   legs = STRATEGIES[key].legs(P).map(l => ({...l}));
   strategyDesc.textContent = STRATEGIES[key].desc;
   renderLegs();
+  const stats = render();
+  targetPctInput.value = defaultProfitTargetPct(stats.profitUnlimited);
   render();
 }
 
@@ -363,6 +415,9 @@ document.getElementById("addLeg").onclick = () => {
 document.getElementById("reset").onclick = loadStrategyDefaults;
 strategySel.onchange = loadStrategyDefaults;
 spotInput.oninput = render;
+riskCapitalInput.oninput = render;
+riskPctInput.oninput = render;
+targetPctInput.oninput = render;
 
 function render() {
   const P = parseFloat(spotInput.value) || 100;
@@ -477,6 +532,54 @@ function render() {
     }
   }
   statBox(netCost >= 0 ? "Débito neto (opciones)" : "Crédito neto (opciones)", fmt(Math.abs(netCost)));
+
+  const rr = riskRewardRatio(stats.maxProfit, stats.maxLoss, stats.profitUnlimited, stats.lossUnlimited);
+  statBox("Riesgo/Beneficio", rr.label);
+
+  // ---- control de riesgo y toma de ganancias ----
+  riskInfoEl.innerHTML = "";
+
+  function riskBlock(html, cls) {
+    const div = document.createElement("div");
+    div.className = "risk-block" + (cls ? " " + cls : "");
+    div.innerHTML = html;
+    riskInfoEl.appendChild(div);
+  }
+
+  if (stats.lossUnlimited) {
+    riskBlock("⚠ Riesgo de pérdida ilimitada — esta estrategia no tiene un tope de pérdida definido.", "warn");
+  }
+
+  const riskBudget = getCapital() * (getRiskPct() / 100);
+  const sizing = suggestedMultiplier(stats.maxLoss, stats.lossUnlimited, riskBudget);
+  if (sizing.warning) {
+    riskBlock(`<strong>Tamaño de posición:</strong> ${sizing.warning}`);
+  } else if (sizing.multiplier < 1) {
+    riskBlock(
+      `<strong>Tamaño de posición:</strong> con ${fmt(riskBudget)} de presupuesto de riesgo (${getRiskPct()}% de ${fmt(getCapital())}), ` +
+      `ni siquiera el tamaño actual de esta posición cabe dentro del límite — reducí la posición o aumentá el presupuesto.`,
+      "warn"
+    );
+  } else {
+    riskBlock(
+      `<strong>Tamaño de posición:</strong> arriesgando ${fmt(riskBudget)} (${getRiskPct()}% de ${fmt(getCapital())}), ` +
+      `podrías escalar esta posición hasta <strong>${sizing.multiplier}x</strong> su tamaño actual sin superar ese límite.`
+    );
+  }
+
+  const targetPct = getTargetPct();
+  const targetDollar = profitTargetDollar(stats.profitUnlimited, stats.maxProfit, netCost, targetPct);
+  const targetCrossings = findCrossings(prices, payoffs, targetDollar);
+  const targetBasisLabel = stats.profitUnlimited ? "de la prima pagada" : "de la ganancia máxima";
+  riskBlock(
+    `<strong>Objetivo de ganancia (${targetPct}% ${targetBasisLabel}):</strong> ≈ ${fmt(targetDollar)}` +
+    (targetCrossings.length
+      ? ` — se alcanzaría con el precio en ${targetCrossings.map(c => "$" + c.toFixed(2)).join(" o ")}.`
+      : " — no se alcanza dentro del rango de precios simulado.") +
+    ` <em>Regla general de referencia, no es una recomendación personalizada.</em>`
+  );
+
+  return stats;
 }
 
 loadStrategyDefaults();
