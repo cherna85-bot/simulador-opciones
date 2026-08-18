@@ -219,11 +219,13 @@ app.get("/api/options/:symbol", requireConfig, async (req, res) => {
   }
 });
 
-const BAR_TF = {
+// Object.create(null): sin cadena de prototipos, así "__proto__"/"constructor"
+// como valor de tf no pueden devolver algo "truthy" y saltarse la validación.
+const BAR_TF = Object.assign(Object.create(null), {
   "5m": { interval: 5, barsback: 60 }, // ~5h de contexto
   "1h": { interval: 60, barsback: 48 }, // ~2 días de contexto
   "4h": { interval: 240, barsback: 30 }, // ~5 días de contexto
-};
+});
 
 app.get("/api/bars/:symbol", requireConfig, async (req, res) => {
   const tf = BAR_TF[req.query.tf];
