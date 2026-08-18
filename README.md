@@ -1,5 +1,7 @@
 # Simulador de Estrategias de Opciones
 
+![Tests](https://github.com/cherna85-bot/simulador-opciones/actions/workflows/test.yml/badge.svg)
+
 Herramienta educativa de una sola página (HTML/CSS/JS, sin dependencias) para visualizar
 la ganancia/pérdida al vencimiento de estrategias comunes con opciones financieras.
 
@@ -25,6 +27,9 @@ node --test
 # o, equivalente:
 npm test
 ```
+
+Un workflow de GitHub Actions (`.github/workflows/test.yml`) corre estas mismas
+pruebas automáticamente en cada push y cada pull request a `main`.
 
 ## Integración opcional con TradeStation (datos de mercado en vivo)
 
