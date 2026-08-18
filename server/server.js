@@ -309,7 +309,13 @@ app.get("/api/news/:symbol", requireAVConfig, async (req, res) => {
 
 app.use(express.static(path.join(__dirname, "..")));
 
-app.listen(PORT, () => {
+// Bind explícito a localhost: sin esto, Node escucha en todas las interfaces
+// de red (0.0.0.0), y con la cuenta de TradeStation/la key de Alpha Vantage
+// conectadas, cualquier otro dispositivo en la misma red WiFi/LAN podría
+// llamar a estos endpoints sin ninguna autenticación propia.
+const HOST = "127.0.0.1";
+
+app.listen(PORT, HOST, () => {
   console.log(`Simulador con integración TradeStation (${TS_ENV.toUpperCase()}) en http://localhost:${PORT}`);
   if (!isConfigured()) {
     console.log("Nota: TS_CLIENT_ID/TS_CLIENT_SECRET no configurados todavía — ver server/.env.example");
