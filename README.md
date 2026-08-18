@@ -61,6 +61,12 @@ Luego abre `http://localhost:3000` (en vez de abrir `index.html` directo) y usa 
 Sin el backend corriendo, `index.html` sigue funcionando exactamente igual que siempre,
 de forma 100% manual.
 
+Con la cuenta conectada, también podés cargar velas japonesas en 3 temporalidades
+a la vez (4h, 1h y 5min apiladas) para un símbolo — pensado para análisis
+multi-temporalidad de day trading/scalping (contexto en 4h/1h, timing de entrada
+en 5min). Es una herramienta de análisis: no genera señales ni ejecuta nada, la
+lectura y la decisión de entrada siguen siendo 100% tuyas.
+
 ## Integración opcional con Alpha Vantage (fundamentales, earnings y noticias)
 
 Con el mismo backend local (`server/`) puedes traer, para cualquier símbolo:
