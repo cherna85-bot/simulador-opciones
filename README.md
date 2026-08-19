@@ -67,6 +67,10 @@ multi-temporalidad de day trading/scalping (contexto en 4h/1h, timing de entrada
 en 5min). Es una herramienta de análisis: no genera señales ni ejecuta nada, la
 lectura y la decisión de entrada siguen siendo 100% tuyas.
 
+El botón "Desconectar cuenta" borra la sesión guardada localmente (no revoca nada
+del lado de TradeStation) — usalo si querés cambiar de cuenta o dejar de tener la
+app conectada.
+
 ## Integración opcional con Alpha Vantage (fundamentales, earnings y noticias)
 
 Con el mismo backend local (`server/`) puedes traer, para cualquier símbolo:
