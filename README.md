@@ -26,6 +26,9 @@ Abre `index.html` directamente en tu navegador. No requiere instalación ni buil
   *hoy* (según la volatilidad implícita y los días a vencimiento que ingreses),
   junto con Delta, Theta (por día) y Vega de la posición completa. Es una
   aproximación educativa de estilo europeo.
+- Tu configuración se guarda automáticamente en el navegador (localStorage) —
+  si recargás la página, seguís donde quedaste en vez de volver al Long Call
+  por defecto. "Restablecer valores por defecto" resetea la estrategia actual.
 
 ## Pruebas
 
