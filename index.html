@@ -191,6 +191,7 @@
           <span class="desc" id="tsStatusText" style="margin:0;">—</span>
         </div>
         <a id="tsConnectBtn" class="btn" href="/auth/login" style="display:none; text-decoration:none; margin-top:8px;">Conectar cuenta</a>
+        <button class="btn" id="tsDisconnectBtn" style="display:none; margin-top:8px; width:100%;">Desconectar cuenta</button>
         <div id="tsQuoteRow" style="display:none; gap:6px; margin-top:8px;">
           <input type="text" id="tsSymbol" placeholder="Símbolo (ej. AAPL)" aria-label="Símbolo para cotización" style="flex:1;">
           <button class="btn" id="tsQuoteBtn" style="white-space:nowrap;">Cotización en vivo</button>
@@ -753,6 +754,7 @@ loadStrategyDefaults();
   const tsChartsError = document.getElementById("tsChartsError");
   const tsChartsPanel = document.getElementById("tsChartsPanel");
   const tsChartsSymbolLabel = document.getElementById("tsChartsSymbolLabel");
+  const tsDisconnectBtn = document.getElementById("tsDisconnectBtn");
 
   let status;
   try {
@@ -779,6 +781,17 @@ loadStrategyDefaults();
   tsStatusText.textContent = `Conectado ✓ (${status.env.toUpperCase()})`;
   tsQuoteRow.style.display = "flex";
   tsChartsBtn.style.display = "block";
+  tsDisconnectBtn.style.display = "block";
+
+  tsDisconnectBtn.onclick = async () => {
+    tsDisconnectBtn.disabled = true;
+    tsDisconnectBtn.textContent = "Desconectando…";
+    try {
+      await fetch("/auth/logout", { method: "POST" });
+    } finally {
+      location.reload();
+    }
+  };
 
   tsQuoteBtn.onclick = async () => {
     const symbol = tsSymbol.value.trim().toUpperCase();

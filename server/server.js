@@ -197,6 +197,17 @@ app.get("/api/status", (req, res) => {
   });
 });
 
+app.post("/auth/logout", (req, res) => {
+  try {
+    fs.unlinkSync(TOKENS_PATH);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+  res.json({ disconnected: true });
+});
+
 app.get("/api/quote/:symbol", requireConfig, async (req, res) => {
   try {
     const token = await getValidAccessToken();
