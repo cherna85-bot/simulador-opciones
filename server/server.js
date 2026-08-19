@@ -223,20 +223,63 @@ app.get("/api/quote/:symbol", requireConfig, async (req, res) => {
   }
 });
 
+// TradeStation's option chain is a STREAMING endpoint (chunked HTTP, one JSON
+// object per line — not SSE, not a single JSON response). It stays open
+// indefinitely as prices update, and TradeStation caps concurrent streams at
+// 10, so we read a bounded number of messages (or until a timeout), then
+// cancel the stream and return what we collected as one JSON array.
+const OPTIONS_STREAM_MAX_ITEMS = 200;
+const OPTIONS_STREAM_TIMEOUT_MS = 5000;
+
 app.get("/api/options/:symbol", requireConfig, async (req, res) => {
   try {
     const token = await getValidAccessToken();
-    const qs = req.query.expiration
-      ? `?expiration=${encodeURIComponent(req.query.expiration)}`
-      : "";
+    const params = new URLSearchParams({ strikeProximity: "5", spreadType: "Single" });
+    if (req.query.expiration) params.set("expiration", req.query.expiration);
     const resp = await fetch(
-      `${TS_BASE}/marketdata/options/chains/${encodeURIComponent(req.params.symbol)}${qs}`,
+      `${TS_BASE}/marketdata/stream/options/chains/${encodeURIComponent(req.params.symbol)}?${params}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!resp.ok) {
       return res.status(resp.status).json({ error: await resp.text() });
     }
-    res.json(await resp.json());
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const items = [];
+    const deadline = Date.now() + OPTIONS_STREAM_TIMEOUT_MS;
+    let streamError = null;
+
+    while (items.length < OPTIONS_STREAM_MAX_ITEMS && Date.now() < deadline) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line) continue;
+        let obj;
+        try {
+          obj = JSON.parse(line);
+        } catch {
+          continue; // línea parcial/corrupta, se ignora
+        }
+        if (obj.Error) {
+          streamError = obj.Error;
+          break;
+        }
+        items.push(obj);
+      }
+      if (streamError) break;
+    }
+    await reader.cancel().catch(() => {});
+
+    if (streamError && items.length === 0) {
+      return res.status(502).json({ error: `TradeStation stream error: ${streamError}` });
+    }
+    res.json({ items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
