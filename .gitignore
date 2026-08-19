@@ -1,3 +1,5 @@
 server/node_modules/
 server/.env
+server/.env.*
+!server/.env.example
 server/tokens.json
