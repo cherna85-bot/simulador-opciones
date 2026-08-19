@@ -307,7 +307,18 @@ app.get("/api/news/:symbol", requireAVConfig, async (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, "..")));
+// Servimos solo los 2 archivos que el frontend realmente necesita (index.html
+// y logic.js), NO todo el directorio del proyecto con express.static(): ese
+// directorio es el padre de server/, así que serviría también server/server.js
+// y — más grave — server/tokens.json (el access/refresh token real de
+// TradeStation una vez conectada la cuenta) como si fueran archivos públicos.
+const PROJECT_ROOT = path.join(__dirname, "..");
+app.get("/", (req, res) => {
+  res.sendFile(path.join(PROJECT_ROOT, "index.html"));
+});
+app.get("/logic.js", (req, res) => {
+  res.sendFile(path.join(PROJECT_ROOT, "logic.js"));
+});
 
 // Bind explícito a localhost: sin esto, Node escucha en todas las interfaces
 // de red (0.0.0.0), y con la cuenta de TradeStation/la key de Alpha Vantage
