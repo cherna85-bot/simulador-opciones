@@ -435,6 +435,36 @@ function getSpot() {
   return Math.max(parseFloat(spotInput.value) || 100, 0.01);
 }
 
+// Persistencia local: recuerda tu configuración entre recargas de página.
+// Falla en silencio si localStorage no está disponible (ej. modo privado).
+const STATE_KEY = "simuladorOpciones.state.v1";
+
+function saveState() {
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify({
+      strategy: strategySel.value,
+      spot: spotInput.value,
+      legs,
+      riskCapital: riskCapitalInput.value,
+      riskPct: riskPctInput.value,
+      targetPct: targetPctInput.value,
+      ivPct: ivPctInput.value,
+      dte: dteInput.value,
+    }));
+  } catch {}
+}
+
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return s && Array.isArray(s.legs) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
 function loadStrategyDefaults() {
   const key = strategySel.value;
   const P = getSpot();
@@ -736,10 +766,26 @@ function render() {
     ` <em>Regla general de referencia, no es una recomendación personalizada.</em>`
   );
 
+  saveState();
   return stats;
 }
 
-loadStrategyDefaults();
+const savedState = loadSavedState();
+if (savedState) {
+  strategySel.value = savedState.strategy || strategySel.value;
+  spotInput.value = savedState.spot ?? spotInput.value;
+  legs = savedState.legs;
+  riskCapitalInput.value = savedState.riskCapital ?? riskCapitalInput.value;
+  riskPctInput.value = savedState.riskPct ?? riskPctInput.value;
+  targetPctInput.value = savedState.targetPct ?? targetPctInput.value;
+  ivPctInput.value = savedState.ivPct ?? ivPctInput.value;
+  dteInput.value = savedState.dte ?? dteInput.value;
+  strategyDesc.textContent = STRATEGIES[strategySel.value] ? STRATEGIES[strategySel.value].desc : "";
+  renderLegs();
+  render();
+} else {
+  loadStrategyDefaults();
+}
 
 // ---- Integración TradeStation (opcional, requiere el backend local en server/) ----
 (async function initTradeStation() {
