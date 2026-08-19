@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { parseEarningsCalendarCsv } = require("../logic.js");
 
 const app = express();
@@ -134,25 +135,36 @@ async function getValidAccessToken() {
   return tokens.access_token;
 }
 
+// App de un solo usuario local: basta con guardar el "state" pendiente en
+// memoria (no hace falta un session store) para validar que el callback de
+// OAuth corresponde al login que arrancamos nosotros, no uno inyectado.
+let pendingOAuthState = null;
+
 app.get("/auth/login", requireConfig, (req, res) => {
+  pendingOAuthState = crypto.randomBytes(16).toString("hex");
   const params = new URLSearchParams({
     response_type: "code",
     client_id: process.env.TS_CLIENT_ID,
     redirect_uri: process.env.TS_REDIRECT_URI,
     audience: "https://api.tradestation.com",
     scope: SCOPE,
+    state: pendingOAuthState,
   });
   res.redirect(`${AUTHORIZE_URL}?${params.toString()}`);
 });
 
 app.get("/auth/callback", requireConfig, async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   if (error) {
     return res.status(400).send(`TradeStation devolvió un error: ${error}`);
   }
   if (!code) {
     return res.status(400).send("Falta el parámetro 'code' en el callback.");
   }
+  if (!pendingOAuthState || state !== pendingOAuthState) {
+    return res.status(400).send("El parámetro 'state' no coincide con el login iniciado (posible CSRF). Intenta conectar de nuevo desde /auth/login.");
+  }
+  pendingOAuthState = null;
   try {
     const resp = await fetch(TOKEN_URL, {
       method: "POST",
